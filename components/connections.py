@@ -1,0 +1,317 @@
+from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, 
+                             QLabel, QLineEdit, QComboBox, QPushButton, QTabWidget, QWidget)
+from PyQt6.QtCore import Qt
+
+class ConnectionDialog(QDialog):
+    def __init__(self, parent=None, connection_data=None):
+        super().__init__(parent)
+        self.connection_id = None
+        self.setWindowTitle("Data Sources and Drivers")
+        self.resize(700, 550)
+        
+        # Thiết kế Dark Theme Darcula cho Dialog
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2b2b2b;
+                color: #a9b7c6;
+            }
+            QLabel { color: #a9b7c6; font-size: 13px; }
+            QLineEdit, QComboBox {
+                background-color: #1e1e1e;
+                color: #a9b7c6;
+                border: 1px solid #3c3f41;
+                padding: 6px;
+                border-radius: 3px;
+                font-size: 13px;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 25px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid #a9b7c6;
+                margin-top: 2px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #2b2b2b;
+                color: #a9b7c6;
+                border: 1px solid #3c3f41;
+                selection-background-color: #2f65ca;
+                selection-color: white;
+                outline: 0;
+            }
+            QComboBox QAbstractItemView::item {
+                min-height: 25px;
+            }
+            QLineEdit:focus, QComboBox:focus {
+                border: 1px solid #589df6;
+            }
+            QPushButton {
+                background-color: #3c3f41;
+                color: #a9b7c6;
+                border: 1px solid #555555;
+                padding: 6px 18px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #4b5052;
+            }
+            QPushButton#primary {
+                background-color: #365880;
+                color: white;
+                border: 1px solid #4a88c7;
+            }
+            QPushButton#primary:hover {
+                background-color: #4a88c7;
+            }
+            QPushButton#test_btn {
+                color: #589df6;
+                background-color: transparent;
+                border: none;
+                font-weight: normal;
+                padding: 0px;
+            }
+            QPushButton#test_btn:hover {
+                text-decoration: underline;
+            }
+            QTabWidget::pane { border: none; border-top: 1px solid #3c3f41; }
+            QTabBar::tab {
+                background-color: #2b2b2b;
+                color: #a9b7c6;
+                padding: 6px 15px;
+                font-size: 13px;
+            }
+            QTabBar::tab:selected {
+                color: #ffffff;
+                border-bottom: 2px solid #589df6;
+            }
+            QTabBar::tab:hover {
+                background-color: #3c3f41;
+            }
+        """)
+        
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        
+        # 1. Top section (Type, Name, Comment)
+        top_layout = QGridLayout()
+        top_layout.setContentsMargins(0, 0, 0, 10)
+        top_layout.setHorizontalSpacing(15)
+        top_layout.setVerticalSpacing(10)
+        
+        top_layout.addWidget(QLabel("Database Type:"), 0, 0)
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["⛁ Oracle", "⛁ MySQL", "⛁ Microsoft SQL Server", "⛁ DB2 iSeries"])
+        self.type_combo.currentTextChanged.connect(self.on_db_type_changed)
+        top_layout.addWidget(self.type_combo, 0, 1)
+        
+        top_layout.addWidget(QLabel("Name:"), 1, 0)
+        self.name_edit = QLineEdit("")
+        top_layout.addWidget(self.name_edit, 1, 1)
+        
+        top_layout.addWidget(QLabel("Comment:"), 2, 0)
+        comment_edit = QLineEdit()
+        top_layout.addWidget(comment_edit, 2, 1)
+        
+        main_layout.addLayout(top_layout)
+        
+        # 2. Tabs section
+        tabs = QTabWidget()
+        gen_tab = QWidget()
+        gen_layout = QGridLayout(gen_tab)
+        gen_layout.setContentsMargins(10, 25, 10, 10)
+        gen_layout.setHorizontalSpacing(15)
+        gen_layout.setVerticalSpacing(20)
+        
+        # Host & Port
+        host_port_layout = QHBoxLayout()
+        host_port_layout.setSpacing(10)
+        self.host_edit = QLineEdit("")
+        self.port_edit = QLineEdit("3306") 
+        self.port_edit.setFixedWidth(80)
+        
+        self.host_edit.textChanged.connect(self.update_url)
+        self.port_edit.textChanged.connect(self.update_url)
+        
+        host_port_layout.addWidget(self.host_edit)
+        host_port_layout.addWidget(QLabel("Port:"))
+        host_port_layout.addWidget(self.port_edit)
+        
+        gen_layout.addWidget(QLabel("Host:"), 0, 0)
+        gen_layout.addLayout(host_port_layout, 0, 1)
+        
+        # Authentication
+        gen_layout.addWidget(QLabel("Authentication:"), 1, 0)
+        auth_combo = QComboBox()
+        auth_combo.addItems(["User & Password", "No Auth"])
+        gen_layout.addWidget(auth_combo, 1, 1)
+        
+        # User
+        gen_layout.addWidget(QLabel("User:"), 2, 0)
+        self.user_edit = QLineEdit("")
+        gen_layout.addWidget(self.user_edit, 2, 1)
+        
+        # Password & Save
+        pass_layout = QHBoxLayout()
+        pass_layout.setSpacing(10)
+        self.pass_edit = QLineEdit("")
+        self.pass_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pass_edit.setPlaceholderText("<hidden>")
+        pass_layout.addWidget(self.pass_edit)
+        
+        pass_layout.addWidget(QLabel("Save:"))
+        save_combo = QComboBox()
+        save_combo.addItems(["Forever", "Until restart", "Never"])
+        pass_layout.addWidget(save_combo)
+        
+        gen_layout.addWidget(QLabel("Password:"), 3, 0)
+        gen_layout.addLayout(pass_layout, 3, 1)
+        
+        # Database
+        gen_layout.addWidget(QLabel("Database:"), 4, 0)
+        self.database_edit = QLineEdit("")
+        gen_layout.addWidget(self.database_edit, 4, 1)
+        
+        # URL
+        gen_layout.addWidget(QLabel("URL:"), 5, 0)
+        url_vbox = QVBoxLayout()
+        self.url_edit = QLineEdit("")
+        # override hint label
+        override_label = QLabel("Overrides settings above")
+        override_label.setStyleSheet("color: #7a7e85; font-size: 11px;")
+        
+        url_vbox.addWidget(self.url_edit)
+        url_vbox.addWidget(override_label)
+        gen_layout.addLayout(url_vbox, 5, 1)
+        
+        # Push everything up
+        gen_layout.setRowStretch(6, 1)
+        
+        tabs.addTab(gen_tab, "General")
+        tabs.addTab(QWidget(), "Options")
+        tabs.addTab(QWidget(), "SSH/SSL")
+        tabs.addTab(QWidget(), "Schemas")
+        tabs.addTab(QWidget(), "Advanced")
+        
+        main_layout.addWidget(tabs)
+        
+        # 3. Bottom section
+        bottom_layout = QHBoxLayout()
+        
+        # Load existing data if provided
+        if connection_data:
+            self.connection_id = connection_data[0]
+            self.name_edit.setText(connection_data[1])
+            self.type_combo.setCurrentText(f"⛁ {connection_data[2]}")
+            self.host_edit.setText(connection_data[3])
+            self.port_edit.setText(str(connection_data[4]))
+            self.user_edit.setText(connection_data[5])
+            self.pass_edit.setText(connection_data[6])
+            self.database_edit.setText(str(connection_data[7] or ""))
+        else:
+            self.type_combo.setCurrentText("⛁ MySQL")
+            
+        self.update_url()
+
+        test_btn = QPushButton("Test Connection")
+        test_btn.setObjectName("test_btn")
+        test_btn.clicked.connect(self.test_connection)
+        
+        ok_btn = QPushButton("OK")
+        ok_btn.setObjectName("primary")
+        ok_btn.setDefault(True) # Make it blue if supported by OS/style natively, or just ID
+        ok_btn.clicked.connect(self.accept)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        
+        apply_btn = QPushButton("Apply")
+        
+        bottom_layout.addWidget(test_btn)
+        bottom_layout.addStretch()
+        bottom_layout.addWidget(ok_btn)
+        bottom_layout.addWidget(cancel_btn)
+        bottom_layout.addWidget(apply_btn)
+        
+        main_layout.addLayout(bottom_layout)
+
+    def test_connection(self):
+        from PyQt6.QtWidgets import QMessageBox
+        db_type = self.type_combo.currentText()
+        if "MySQL" not in db_type:
+            QMessageBox.warning(self, "Not Supported", "Tính năng Test thật hiện tại mới chỉ hỗ trợ kết nối qua MySQL (PyMySQL).")
+            return
+
+        try:
+            import pymysql
+            connection = pymysql.connect(
+                host=self.host_edit.text() or 'localhost',
+                user=self.user_edit.text() or 'root',
+                password=self.pass_edit.text(),
+                database=self.database_edit.text() if self.database_edit.text() else None,
+                port=int(self.port_edit.text() or 3306),
+                connect_timeout=5
+            )
+            # Truy xuất thử version để check kết nối thực
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT VERSION()")
+                version = cursor.fetchone()[0]
+            connection.close()
+            
+            QMessageBox.information(
+                self, 
+                "Test Connection System", 
+                f"✅ Nối DB thật vô CSDL thành công nha!\n\nDB Version: {version}"
+            )
+        except ImportError:
+            QMessageBox.critical(self, "Thiếu Thư Viện", "Oops! Gói 'pymysql' chưa được cài đặt. Vui lòng cài driver trước (pip install pymysql)!")
+        except Exception as e:
+            QMessageBox.critical(self, "Kết nối thất bại", f"❌ Test fail rồi!\n\nNội dung lỗi:\n{str(e)}")
+
+    def on_db_type_changed(self, text):
+        # Only change default ports when switching DB type to avoid overwriting host
+        if "Oracle" in text:
+            self.port_edit.setText("1521")
+        elif "MySQL" in text:
+            self.port_edit.setText("3306")
+        elif "SQL Server" in text:
+            self.port_edit.setText("1433")
+        elif "DB2" in text:
+            self.port_edit.setText("")
+            
+        self.update_url()
+
+    def get_connection_data(self):
+        return {
+            'name': self.name_edit.text() or "Unnamed",
+            'db_type': self.type_combo.currentText().replace("⛁ ", ""),
+            'host': self.host_edit.text() or "localhost",
+            'port': int(self.port_edit.text() or 0),
+            'username': self.user_edit.text(),
+            'password': self.pass_edit.text(),
+            'database_name': self.database_edit.text()
+        }
+
+    def update_url(self):
+        db_type = self.type_combo.currentText()
+        host = self.host_edit.text()
+        port = self.port_edit.text()
+        
+        if not host:
+            host = "localhost"
+            
+        port_str = f":{port}" if port else ""
+        
+        if "Oracle" in db_type:
+            self.url_edit.setText(f"jdbc:oracle:thin:@{host}{port_str}:XE")
+        elif "MySQL" in db_type:
+            self.url_edit.setText(f"jdbc:mysql://{host}{port_str}")
+        elif "SQL Server" in db_type:
+            self.url_edit.setText(f"jdbc:sqlserver://{host}{port_str}")
+        elif "DB2" in db_type:
+            self.url_edit.setText(f"jdbc:as400://{host}{port_str}")
