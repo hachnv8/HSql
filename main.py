@@ -7,7 +7,7 @@ from PyQt6.QtGui import QFont, QKeySequence, QShortcut
 from components.sidebar import DatabaseExplorer
 from components.console import SqlConsole
 from components.results import ResultsGrid
-from components.db_store import init_db
+from components.db_store import init_db, set_environment
 
 class HSqlMainWindow(QMainWindow):
     def __init__(self):
@@ -128,6 +128,34 @@ if __name__ == '__main__':
     # Font hệ thống gọn gàng
     font = QFont("JetBrains Mono", 10)
     app.setFont(font)
+    
+    from PyQt6.QtWidgets import QMessageBox
+    
+    # Hiển thị popup chọn môi trường
+    msgBox = QMessageBox()
+    msgBox.setWindowTitle("Choose Environment")
+    msgBox.setText("Select the database environment for HSql:")
+    
+    btn_local = msgBox.addButton("Local (Windows/SQLite)", QMessageBox.ButtonRole.AcceptRole)
+    btn_prod = msgBox.addButton("Production (Linux/MySQL)", QMessageBox.ButtonRole.AcceptRole)
+    
+    # Giao diện Dark theme cơ bản cho msgBox
+    msgBox.setStyleSheet("""
+        QMessageBox { background-color: #2b2b2b; color: #a9b7c6; }
+        QLabel { color: #a9b7c6; }
+        QPushButton {
+            background-color: #3c3f41; color: #a9b7c6;
+            border: 1px solid #555555; padding: 6px 18px; border-radius: 4px;
+        }
+        QPushButton:hover { background-color: #4b5052; }
+    """)
+    
+    msgBox.exec()
+    
+    if msgBox.clickedButton() == btn_prod:
+        set_environment("production")
+    else:
+        set_environment("local")
     
     window = HSqlMainWindow()
     window.showMaximized()
