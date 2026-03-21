@@ -1,52 +1,155 @@
 import sqlite3
 import os
+import platform
+import json
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'hsql.db')
 
+# Cấu hình môi trường theo OS
+ENVIRONMENT = "local" if platform.system() == "Windows" else "production"
+
+db_config = {}
+# Thử đọc config.json nếu chạy trên production (Linux)
+if ENVIRONMENT == "production":
+    config_file = os.path.join(os.path.dirname(__file__), '..', 'config.json')
+    if os.path.exists(config_file):
+        with open(config_file, "r") as f:
+            config_data = json.load(f)
+            db_config = config_data.get(ENVIRONMENT, {})
+
+DB_HOST = db_config.get("host", "localhost")
+DB_USER = db_config.get("user", "root")
+DB_PASSWORD = db_config.get("password", "")
+DB_NAME = db_config.get("database", "portfolio_db")
+
+def get_mysql_connection():
+    import pymysql
+    # Sử dụng con trỏ mặc định (tuple) để tương thích với output của sqlite3
+    return pymysql.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+
 def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS connections (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT,
-                db_type TEXT,
-                host TEXT,
-                port INTEGER,
-                username TEXT,
-                password TEXT,
-                database_name TEXT
-            )
-        ''')
-        conn.commit()
+    if ENVIRONMENT == "local":
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS connections (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT,
+                    db_type TEXT,
+                    host TEXT,
+                    port INTEGER,
+                    username TEXT,
+                    password TEXT,
+                    database_name TEXT
+                )
+            ''')
+            conn.commit()
+    else:
+        # Nếu chưa có DB, tạo mới cho Production
+        import pymysql
+        try:
+            temp_conn = pymysql.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD)
+            with temp_conn.cursor() as temp_cursor:
+                temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME}")
+            temp_conn.commit()
+            temp_conn.close()
+        except:
+            pass
+
+        conn = get_mysql_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS connections (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        name VARCHAR(255),
+                        db_type VARCHAR(50),
+                        host VARCHAR(255),
+                        port INT,
+                        username VARCHAR(255),
+                        password VARCHAR(255),
+                        database_name VARCHAR(255)
+                    )
+                ''')
+            conn.commit()
+        finally:
+            conn.close()
 
 def get_connections():
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections")
-        return cursor.fetchall()
+    if ENVIRONMENT == "local":
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections")
+            return cursor.fetchall()
+    else:
+        conn = get_mysql_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections")
+                return cursor.fetchall()
+        finally:
+            conn.close()
 
 def get_connection(conn_id):
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections WHERE id = ?", (conn_id,))
-        return cursor.fetchone()
+    if ENVIRONMENT == "local":
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections WHERE id = ?", (conn_id,))
+            return cursor.fetchone()
+    else:
+        conn = get_mysql_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections WHERE id = %s", (conn_id,))
+                return cursor.fetchone()
+        finally:
+            conn.close()
 
 def update_connection(conn_id, data):
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE connections 
-            SET name=?, db_type=?, host=?, port=?, username=?, password=?, database_name=?
-            WHERE id=?
-        ''', (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], conn_id))
-        conn.commit()
+    if ENVIRONMENT == "local":
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE connections 
+                SET name=?, db_type=?, host=?, port=?, username=?, password=?, database_name=?
+                WHERE id=?
+            ''', (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], conn_id))
+            conn.commit()
+    else:
+        conn = get_mysql_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    UPDATE connections 
+                    SET name=%s, db_type=%s, host=%s, port=%s, username=%s, password=%s, database_name=%s
+                    WHERE id=%s
+                ''', (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], conn_id))
+            conn.commit()
+        finally:
+            conn.close()
 
 def save_connection(data):
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO connections (name, db_type, host, port, username, password, database_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name']))
-        conn.commit()
+    if ENVIRONMENT == "local":
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO connections (name, db_type, host, port, username, password, database_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name']))
+            conn.commit()
+    else:
+        conn = get_mysql_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    INSERT INTO connections (name, db_type, host, port, username, password, database_name)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ''', (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name']))
+            conn.commit()
+        finally:
+            conn.close()
