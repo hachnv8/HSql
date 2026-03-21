@@ -1,7 +1,7 @@
 import sqlite3
 import os
 import platform
-import json
+import configparser
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'hsql.db')
 
@@ -16,16 +16,17 @@ def set_environment(env):
     global ENVIRONMENT, DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
     ENVIRONMENT = env
     
-    # Thử đọc config.json nếu chạy trên production (Linux)
+    # Đọc config.ini nếu chạy trên production (Linux)
     if ENVIRONMENT == "production":
-        config_file = os.path.join(os.path.dirname(__file__), '..', 'config.json')
+        config_file = os.path.join(os.path.dirname(__file__), '..', 'config.ini')
         if os.path.exists(config_file):
-            with open(config_file, "r") as f:
-                config_data = json.load(f)
-                db_config = config_data.get(ENVIRONMENT, {})
+            config = configparser.ConfigParser()
+            config.read(config_file, encoding="utf-8")
+            if 'database' in config:
+                db_config = config['database']
                 
-                DB_HOST = db_config.get("host", "localhost")
-                DB_USER = db_config.get("user", "root")
+                DB_HOST = db_config.get("host", "10.201.11.115")
+                DB_USER = db_config.get("username", "root")
                 DB_PASSWORD = db_config.get("password", "")
                 DB_NAME = db_config.get("database", "portfolio_db")
 
