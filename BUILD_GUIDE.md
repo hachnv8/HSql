@@ -14,7 +14,7 @@ venv\Scripts\activate
 ## 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
-pip install pyinstaller
+pip install pyinstaller pyodbc oracledb
 ```
 
 ## 4. Build the Executable
@@ -25,6 +25,8 @@ pyinstaller --noconfirm --onefile --windowed --name "HSql" ^
  --add-data "components;components" ^
  --hidden-import="pymysql" ^
  --hidden-import="sqlparse" ^
+ --hidden-import="pyodbc" ^
+ --hidden-import="oracledb" ^
  main.py
 ```
 
