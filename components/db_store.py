@@ -19,23 +19,31 @@ def set_environment(env):
     
     # Đọc config.ini nếu chạy trên production (Linux)
     if ENVIRONMENT == "production":
-        # Thử tìm ở nhiều vị trí để chắc chắn (gốc project hoặc cùng thư mục components)
+        print(f"--- DEBUG: Starting production config load ---")
+        print(f"Current Dir (os.getcwd()): {os.getcwd()}")
+        print(f"Script Dir (__file__): {os.path.dirname(__file__)}")
+        
         possible_paths = [
             os.path.join(os.path.dirname(__file__), '..', 'config.ini'),
             os.path.join(os.getcwd(), 'config.ini'),
-            'config.ini'
+            os.path.abspath('config.ini')
         ]
         
         config_file = None
         for p in possible_paths:
-            if os.path.exists(p):
-                config_file = p
+            abs_p = os.path.abspath(p)
+            exists = os.path.exists(abs_p)
+            print(f"Checking path: {abs_p} -> Exists: {exists}")
+            if exists:
+                config_file = abs_p
                 break
                 
         if config_file:
             try:
                 config = configparser.ConfigParser()
                 config.read(config_file, encoding="utf-8")
+                print(f"Successfully read config file. Sections: {config.sections()}")
+                
                 if 'database' in config:
                     db_config = config['database']
                     DB_HOST = db_config.get("host", "10.201.11.115")
@@ -43,13 +51,19 @@ def set_environment(env):
                     DB_USER = db_config.get("username", "root")
                     DB_PASSWORD = db_config.get("password", "")
                     DB_NAME = db_config.get("database", "portfolio_db")
-                    print(f"Loaded config from {config_file}: {DB_HOST}:{DB_PORT}")
+                    print(f"--- SUCCESS: Loaded config ---")
+                    print(f"Host: {DB_HOST}, User: {DB_USER}, DB: {DB_NAME}")
+                else:
+                    print("Error: Section [database] NOT FOUND in config.ini")
             except Exception as e:
-                print(f"Error reading config.ini: {e}")
+                print(f"Error parsing config.ini: {e}")
         else:
-            print("Warning: config.ini NOT FOUND. Using default production settings.")
+            print("--- CRITICAL: config.ini NOT FOUND in any expected location ---")
+            # Fallback values
             DB_HOST = "10.201.11.115"
             DB_PORT = 3306
+            DB_USER = "portfolio_user" # Better defaults just in case
+            DB_PASSWORD = "portfolio_password"
 
 def get_mysql_connection():
     import pymysql
