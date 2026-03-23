@@ -182,22 +182,28 @@ class DatabaseExplorer(QDockWidget):
                 self.load_tables(item, conn_id, db_name)
 
     def load_databases(self, item, conn_id):
-        from components.db_store import get_connection
-        import pymysql
+        from components.db_store import get_connection, get_db_connection
         conn_data = get_connection(conn_id)
         if not conn_data: return
         
-        if "MySQL" not in conn_data[2]:
-            item.appendRow(QStandardItem(f"Introspection not supported for {conn_data[2]} yet"))
-            return
-            
+        db_type = conn_data[2]
+        
         try:
-            conn = pymysql.connect(
-                host=conn_data[3], port=int(conn_data[4]),
-                user=conn_data[5], password=conn_data[6]
-            )
+            conn = get_db_connection(conn_id)
+            if not conn:
+                item.appendRow(QStandardItem("Error: Unable to connect"))
+                return
+                
             with conn.cursor() as cursor:
-                cursor.execute("SHOW DATABASES")
+                if "MySQL" in db_type:
+                    cursor.execute("SHOW DATABASES")
+                elif "Oracle" in db_type:
+                    cursor.execute("SELECT username FROM all_users ORDER BY username")
+                elif "SQL Server" in db_type:
+                    cursor.execute("SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')")
+                elif "DB2" in db_type:
+                    cursor.execute("SELECT SCHEMA_NAME FROM QSYS2.SYSSCHEMAS ORDER BY SCHEMA_NAME")
+                
                 dbs = cursor.fetchall()
                 
             default_db = conn_data[7] if len(conn_data) > 7 else None
@@ -228,33 +234,51 @@ class DatabaseExplorer(QDockWidget):
             item.appendRow(QStandardItem(f"Error: {e}"))
 
     def load_tables(self, item, conn_id, db_name):
-        from components.db_store import get_connection
-        import pymysql
+        from components.db_store import get_connection, get_db_connection
         conn_data = get_connection(conn_id)
         if not conn_data: return
+        db_type = conn_data[2]
         
         try:
-            conn = pymysql.connect(
-                host=conn_data[3], port=int(conn_data[4]),
-                user=conn_data[5], password=conn_data[6], database=db_name
-            )
+            conn = get_db_connection(conn_id, db_name)
+            if not conn:
+                item.appendRow(QStandardItem("Error: Unable to connect"))
+                return
+                
             with conn.cursor() as cursor:
-                cursor.execute("SHOW FULL TABLES")
-                tables = cursor.fetchall()
+                if "MySQL" in db_type:
+                    cursor.execute("SHOW FULL TABLES")
+                    rows = cursor.fetchall()
+                    # Filter for BASE TABLE
+                    tables = [r[0] for r in rows if r[1] == "BASE TABLE"]
+                elif "Oracle" in db_type:
+                    cursor.execute("SELECT table_name FROM all_tables WHERE owner = :1 ORDER BY table_name", (db_name,))
+                    tables = [r[0] for r in cursor.fetchall()]
+                elif "SQL Server" in db_type:
+                    cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_catalog = ? AND table_type = 'BASE TABLE'", (db_name,))
+                    tables = [r[0] for r in cursor.fetchall()]
+                elif "DB2" in db_type:
+                    cursor.execute("SELECT TABLE_NAME FROM QSYS2.SYSTABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME", (db_name,))
+                    tables = [r[0] for r in cursor.fetchall()]
+                else:
+                    tables = []
                 
-            base_tables = [t for t in tables if t[1] == "BASE TABLE"]
-            tables_folder = QStandardItem(f"📁 tables  {len(base_tables)}")
-            tables_folder.setEditable(False)
+            if tables:
+                tables_folder = QStandardItem(f"📁 tables  {len(tables)}")
+                tables_folder.setEditable(False)
+                
+                for table_name in tables:
+                    table_item = QStandardItem(f"⊞ {table_name}")
+                    table_item.setData("table", Qt.ItemDataRole.UserRole + 1)
+                    table_item.setData(conn_id, Qt.ItemDataRole.UserRole)
+                    table_item.setEditable(False)
+                    tables_folder.appendRow(table_item)
+                    
+                item.appendRow(tables_folder)
+            else:
+                item.appendRow(QStandardItem("No tables found"))
             
-            for tbl in base_tables:
-                table_name = tbl[0]
-                table_item = QStandardItem(f"⊞ {table_name}")
-                table_item.setData("table", Qt.ItemDataRole.UserRole + 1)
-                table_item.setData(conn_id, Qt.ItemDataRole.UserRole)
-                table_item.setEditable(False)
-                tables_folder.appendRow(table_item)
-                
-            item.appendRow(tables_folder)
+            conn.close()
         except Exception as e:
             item.appendRow(QStandardItem(f"Error: {e}"))
 

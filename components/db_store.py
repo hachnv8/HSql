@@ -214,3 +214,58 @@ def set_default_database(conn_id, db_name):
             conn.commit()
         finally:
             conn.close()
+
+def get_default_database(conn_id):
+    conn_data = get_connection(conn_id)
+    if conn_data and len(conn_data) > 7:
+        return conn_data[7]
+    return None
+
+def get_db_connection(conn_id, database_name=None):
+    """
+    Returns a unified connection object based on the connection type.
+    """
+    conn_data = get_connection(conn_id)
+    if not conn_data:
+        return None
+        
+    db_type = conn_data[2]
+    host = conn_data[3]
+    port = conn_data[4]
+    user = conn_data[5]
+    password = conn_data[6]
+    db_name = database_name or conn_data[7]
+    
+    if "MySQL" in db_type:
+        import pymysql
+        return pymysql.connect(
+            host=host, port=int(port or 3306),
+            user=user, password=password,
+            database=db_name,
+            connect_timeout=10
+        )
+    elif "Oracle" in db_type:
+        # Standard Oracle ports: 1521
+        dsn = f"{host}:{port}/{db_name}" if db_name else f"{host}:{port}"
+        try:
+            import oracledb
+            return oracledb.connect(user=user, password=password, dsn=dsn)
+        except ImportError:
+            import cx_Oracle
+            return cx_Oracle.connect(user=user, password=password, dsn=dsn)
+    elif "SQL Server" in db_type:
+        import pyodbc
+        # Port for SQL Server is usually 1433
+        p = port if port else 1433
+        conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={host},{p};DATABASE={db_name};UID={user};PWD={password}"
+        return pyodbc.connect(conn_str)
+    elif "DB2" in db_type:
+        import pyodbc
+        # Default port for DB2 iSeries typically 446 (DRDA) or 8471
+        port_part = f",{port}" if port else ""
+        conn_str = f"DRIVER={{IBM i Access ODBC Driver}};SYSTEM={host}{port_part};UID={user};PWD={password};"
+        if db_name:
+            conn_str += f"DBQ={db_name};"
+        return pyodbc.connect(conn_str)
+        
+    return None

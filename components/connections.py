@@ -242,36 +242,80 @@ class ConnectionDialog(QDialog):
 
     def test_connection(self):
         from PyQt6.QtWidgets import QMessageBox
-        db_type = self.type_combo.currentText()
-        if "MySQL" not in db_type:
-            QMessageBox.warning(self, "Not Supported", "Tính năng Test thật hiện tại mới chỉ hỗ trợ kết nối qua MySQL (PyMySQL).")
-            return
-
+        from components.db_store import get_db_connection, save_connection, update_connection, get_connection
+        import os
+        
+        # To test, we temporarily need these settings in the DB or a way to pass them
+        # Simple way: Create a dummy data dict and use a mock-like approach or just direct connect
+        db_type = self.type_combo.currentText().replace("⛁ ", "")
+        host = self.host_edit.text() or 'localhost'
+        port = self.port_edit.text()
+        user = self.user_edit.text()
+        password = self.pass_edit.text()
+        db_name = self.database_edit.text()
+        
+        # Build a temporary connection check
         try:
-            import pymysql
-            connection = pymysql.connect(
-                host=self.host_edit.text() or 'localhost',
-                user=self.user_edit.text() or 'root',
-                password=self.pass_edit.text(),
-                database=self.database_edit.text() if self.database_edit.text() else None,
-                port=int(self.port_edit.text() or 3306),
-                connect_timeout=5
-            )
-            # Truy xuất thử version để check kết nối thực
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT VERSION()")
-                version = cursor.fetchone()[0]
-            connection.close()
+            # We use a trick: bypass the stored ID and use the logic from get_db_connection
+            # but we'll manually import the drivers here for the TEST button feedback
+            if "MySQL" in db_type:
+                import pymysql
+                conn = pymysql.connect(
+                    host=host, port=int(port or 3306),
+                    user=user, password=password,
+                    database=db_name if db_name else None,
+                    connect_timeout=5
+                )
+            elif "Oracle" in db_type:
+                dsn = f"{host}:{port}/{db_name}" if db_name else f"{host}:{port}"
+                try:
+                    import oracledb
+                    conn = oracledb.connect(user=user, password=password, dsn=dsn)
+                except ImportError:
+                    import cx_Oracle
+                    conn = cx_Oracle.connect(user=user, password=password, dsn=dsn)
+            elif "SQL Server" in db_type:
+                import pyodbc
+                p = port if port else 1433
+                conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={host},{p};DATABASE={db_name};UID={user};PWD={password}"
+                conn = pyodbc.connect(conn_str, timeout=5)
+            elif "DB2" in db_type:
+                import pyodbc
+                port_part = f",{port}" if port else ""
+                conn_str = f"DRIVER={{IBM i Access ODBC Driver}};SYSTEM={host}{port_part};UID={user};PWD={password};"
+                if db_name: conn_str += f"DBQ={db_name};"
+                conn = pyodbc.connect(conn_str, timeout=5)
+            else:
+                QMessageBox.warning(self, "Not Supported", f"Loại DB '{db_type}' chưa được hỗ trợ test.")
+                return
+
+            # Connection success check
+            cursor = conn.cursor()
+            # Generic version check if possible
+            version = "Unknown"
+            try:
+                if "MySQL" in db_type:
+                    cursor.execute("SELECT VERSION()")
+                elif "Oracle" in db_type:
+                    cursor.execute("SELECT version FROM v$instance")
+                elif "SQL Server" in db_type:
+                    cursor.execute("SELECT @@VERSION")
+                elif "DB2" in db_type:
+                    cursor.execute("SELECT CHARACTER_SUBSET FROM QSYS2.SYSCFG") # Simple iSeries check
+                
+                res = cursor.fetchone()
+                if res: version = str(res[0])
+            except:
+                version = "Connected (Version check failed)"
+                
+            conn.close()
+            QMessageBox.information(self, "Success", f"✅ Kết nối thành công tới {db_type}!\n\nVersion/Info: {version[:100]}")
             
-            QMessageBox.information(
-                self, 
-                "Test Connection System", 
-                f"✅ Nối DB thật vô CSDL thành công nha!\n\nDB Version: {version}"
-            )
-        except ImportError:
-            QMessageBox.critical(self, "Thiếu Thư Viện", "Oops! Gói 'pymysql' chưa được cài đặt. Vui lòng cài driver trước (pip install pymysql)!")
+        except ImportError as ie:
+            lib = str(ie).split("'")[-2] if "'" in str(ie) else "driver"
+            QMessageBox.critical(self, "Thiếu Thư Viện", f"Vui lòng cài đặt thư viện hỗ trợ: pip install {lib}")
         except Exception as e:
-            QMessageBox.critical(self, "Kết nối thất bại", f"❌ Test fail rồi!\n\nNội dung lỗi:\n{str(e)}")
+            QMessageBox.critical(self, "Kết nối thất bại", f"❌ Lỗi kết nối:\n{str(e)}")
 
     def on_db_type_changed(self, text):
         # Only change default ports when switching DB type to avoid overwriting host

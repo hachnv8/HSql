@@ -214,22 +214,29 @@ class SqlConsole(QWidget):
         tables = []
         if conn_id:
             try:
-                from components.db_store import get_connection
-                import pymysql
+                from components.db_store import get_db_connection, get_connection
                 conn_data = get_connection(conn_id)
-                if conn_data:
-                    conn = pymysql.connect(
-                        host=conn_data[3], port=int(conn_data[4]),
-                        user=conn_data[5], password=conn_data[6],
-                        database=db_name, connect_timeout=1
-                    )
+                db_type = conn_data[2]
+                conn = get_db_connection(conn_id, db_name)
+                
+                if conn:
                     with conn.cursor() as cur:
-                        if db_name:
-                            cur.execute("SHOW TABLES")
-                        else:
-                            cur.execute("SHOW DATABASES")
+                        if "MySQL" in db_type:
+                            if db_name: cur.execute("SHOW TABLES")
+                            else: cur.execute("SHOW DATABASES")
+                        elif "Oracle" in db_type:
+                            if db_name: cur.execute("SELECT table_name FROM all_tables WHERE owner = :1", (db_name,))
+                            else: cur.execute("SELECT username FROM all_users")
+                        elif "SQL Server" in db_type:
+                            if db_name: cur.execute("SELECT table_name FROM information_schema.tables WHERE table_catalog = ?", (db_name,))
+                            else: cur.execute("SELECT name FROM sys.databases")
+                        elif "DB2" in db_type:
+                            if db_name: cur.execute("SELECT TABLE_NAME FROM QSYS2.SYSTABLES WHERE TABLE_SCHEMA = ?", (db_name,))
+                            else: cur.execute("SELECT SCHEMA_NAME FROM QSYS2.SYSSCHEMAS")
+                        
                         rows = cur.fetchall()
-                        tables = [r[0] for r in rows]
+                        tables = [str(r[0]) for r in rows]
+                    conn.close()
             except Exception:
                 pass
         
@@ -337,11 +344,11 @@ class SqlConsole(QWidget):
         if not statements: return
         
         try:
-            conn = pymysql.connect(
-                host=conn_data[3], port=int(conn_data[4]),
-                user=conn_data[5], password=conn_data[6],
-                database=db_name
-            )
+            from components.db_store import get_db_connection
+            conn = get_db_connection(self.current_conn_id, db_name)
+            if not conn:
+                QMessageBox.critical(self, "Lỗi", "Không thể tạo kết nối tới Database!")
+                return
             affected = 0
             last_headers = None
             last_rows = None
