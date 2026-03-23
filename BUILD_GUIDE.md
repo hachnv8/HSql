@@ -14,7 +14,7 @@ venv\Scripts\activate
 ## 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
-pip install pyinstaller pyodbc oracledb
+pip install pyinstaller pyodbc oracledb JayDeBeApi JPype1
 ```
 
 ## 4. Build the Executable
@@ -27,6 +27,8 @@ pyinstaller --noconfirm --onefile --windowed --name "HSql" ^
  --hidden-import="sqlparse" ^
  --hidden-import="pyodbc" ^
  --hidden-import="oracledb" ^
+ --hidden-import="jaydebeapi" ^
+ --hidden-import="jpype" ^
  main.py
 ```
 

@@ -260,12 +260,21 @@ def get_db_connection(conn_id, database_name=None):
         conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={host},{p};DATABASE={db_name};UID={user};PWD={password}"
         return pyodbc.connect(conn_str)
     elif "DB2" in db_type:
-        import pyodbc
-        # Default port for DB2 iSeries typically 446 (DRDA) or 8471
-        port_part = f",{port}" if port else ""
-        conn_str = f"DRIVER={{IBM i Access ODBC Driver}};SYSTEM={host}{port_part};UID={user};PWD={password};"
-        if db_name:
-            conn_str += f"DBQ={db_name};"
-        return pyodbc.connect(conn_str)
+        import jaydebeapi
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        jar_path = os.path.join(project_root, "drivers", "jt400.jar")
+        
+        if not os.path.exists(jar_path):
+            raise FileNotFoundError(f"Missing JDBC Driver: {jar_path}")
+            
+        url = f"jdbc:as400://{host}"
+        # If a port is specified, it's usually added to the URL for JT400 though default is 446
+        # URL format: jdbc:as400://systemname[:port][/defaultSchema][;property=value...]
+        if port:
+            url += f":{port}"
+            
+        driver_class = "com.ibm.as400.access.AS400JDBCDriver"
+        return jaydebeapi.connect(driver_class, url, [user, password], jar_path)
         
     return None

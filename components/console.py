@@ -220,7 +220,8 @@ class SqlConsole(QWidget):
                 conn = get_db_connection(conn_id, db_name)
                 
                 if conn:
-                    with conn.cursor() as cur:
+                    cur = conn.cursor()
+                    try:
                         if "MySQL" in db_type:
                             if db_name: cur.execute("SHOW TABLES")
                             else: cur.execute("SHOW DATABASES")
@@ -236,6 +237,8 @@ class SqlConsole(QWidget):
                         
                         rows = cur.fetchall()
                         tables = [str(r[0]) for r in rows]
+                    finally:
+                        cur.close()
                     conn.close()
             except Exception:
                 pass

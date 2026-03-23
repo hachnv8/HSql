@@ -280,11 +280,19 @@ class ConnectionDialog(QDialog):
                 conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={host},{p};DATABASE={db_name};UID={user};PWD={password}"
                 conn = pyodbc.connect(conn_str, timeout=5)
             elif "DB2" in db_type:
-                import pyodbc
-                port_part = f",{port}" if port else ""
-                conn_str = f"DRIVER={{IBM i Access ODBC Driver}};SYSTEM={host}{port_part};UID={user};PWD={password};"
-                if db_name: conn_str += f"DBQ={db_name};"
-                conn = pyodbc.connect(conn_str, timeout=5)
+                import jaydebeapi
+                import os
+                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                jar_path = os.path.join(project_root, "drivers", "jt400.jar")
+                
+                if not os.path.exists(jar_path):
+                    QMessageBox.critical(self, "Thiếu Driver", f"Không tìm thấy file {jar_path}. Vui lòng copy vào thư mục drivers/.")
+                    return
+                    
+                url = f"jdbc:as400://{host}"
+                if port: url += f":{port}"
+                driver_class = "com.ibm.as400.access.AS400JDBCDriver"
+                conn = jaydebeapi.connect(driver_class, url, [user, password], jar_path)
             else:
                 QMessageBox.warning(self, "Not Supported", f"Loại DB '{db_type}' chưa được hỗ trợ test.")
                 return

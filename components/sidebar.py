@@ -194,7 +194,8 @@ class DatabaseExplorer(QDockWidget):
                 item.appendRow(QStandardItem("Error: Unable to connect"))
                 return
                 
-            with conn.cursor() as cursor:
+            cursor = conn.cursor()
+            try:
                 if "MySQL" in db_type:
                     cursor.execute("SHOW DATABASES")
                 elif "Oracle" in db_type:
@@ -205,6 +206,8 @@ class DatabaseExplorer(QDockWidget):
                     cursor.execute("SELECT SCHEMA_NAME FROM QSYS2.SYSSCHEMAS ORDER BY SCHEMA_NAME")
                 
                 dbs = cursor.fetchall()
+            finally:
+                cursor.close()
                 
             default_db = conn_data[7] if len(conn_data) > 7 else None
             
@@ -245,7 +248,8 @@ class DatabaseExplorer(QDockWidget):
                 item.appendRow(QStandardItem("Error: Unable to connect"))
                 return
                 
-            with conn.cursor() as cursor:
+            cursor = conn.cursor()
+            try:
                 if "MySQL" in db_type:
                     cursor.execute("SHOW FULL TABLES")
                     rows = cursor.fetchall()
@@ -262,6 +266,8 @@ class DatabaseExplorer(QDockWidget):
                     tables = [r[0] for r in cursor.fetchall()]
                 else:
                     tables = []
+            finally:
+                cursor.close()
                 
             if tables:
                 tables_folder = QStandardItem(f"📁 tables  {len(tables)}")
