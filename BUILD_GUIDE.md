@@ -21,15 +21,7 @@ pip install pyinstaller pyodbc oracledb JayDeBeApi JPype1
 Run the following command to build a single, windowed executable:
 
 ```bash
-pyinstaller --noconfirm --onefile --windowed --name "HSql" ^
- --add-data "components;components" ^
- --hidden-import="pymysql" ^
- --hidden-import="sqlparse" ^
- --hidden-import="pyodbc" ^
- --hidden-import="oracledb" ^
- --hidden-import="jaydebeapi" ^
- --hidden-import="jpype" ^
- main.py
+pyinstaller --noconfirm --onefile --windowed --name "HSql" --add-data "components;components" --add-data "drivers;drivers" --hidden-import="pymysql" --hidden-import="sqlparse" --hidden-import="pyodbc" --hidden-import="oracledb" main.py
 ```
 
 ### Explanation of flags:

@@ -1,0 +1,113 @@
+129 INFO: PyInstaller: 6.19.0, contrib hooks: 2026.3
+129 INFO: Python: 3.13.12
+159 INFO: Platform: Windows-11-10.0.26200-SP0
+159 INFO: Python environment: C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv
+162 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Scripts\\pyinstaller.exe',
+ 'C:\\Users\\AmkorAdmin\\AppData\\Local\\Programs\\Python\\Python313\\python313.zip',
+ 'C:\\Users\\AmkorAdmin\\AppData\\Local\\Programs\\Python\\Python313\\DLLs',
+ 'C:\\Users\\AmkorAdmin\\AppData\\Local\\Programs\\Python\\Python313\\Lib',
+ 'C:\\Users\\AmkorAdmin\\AppData\\Local\\Programs\\Python\\Python313',
+ 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv',
+ 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages',
+ 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql']
+445 INFO: Appending 'datas' from .spec
+446 INFO: checking Analysis
+446 INFO: Building Analysis because Analysis-00.toc is non existent
+446 INFO: Looking for Python shared library...
+446 INFO: Using Python shared library: C:\Users\AmkorAdmin\AppData\Local\Programs\Python\Python313\python313.dll
+446 INFO: Running Analysis Analysis-00.toc
+446 INFO: Target bytecode optimization level: 0
+446 INFO: Initializing module dependency graph...
+447 INFO: Initializing module graph hook caches...
+456 INFO: Analyzing modules for base_library.zip ...
+1604 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+3007 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+3755 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+4076 INFO: Caching module dependency graph...
+4101 INFO: Analyzing C:\Users\AmkorAdmin\Desktop\Hacker\HSql\main.py
+4110 INFO: Processing standard module hook 'hook-PyQt6.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+4692 INFO: Processing standard module hook 'hook-PyQt6.QtWidgets.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+6957 INFO: Processing standard module hook 'hook-PyQt6.QtCore.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+10312 INFO: Processing standard module hook 'hook-PyQt6.QtGui.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+24697 INFO: Processing standard module hook 'hook-sqlite3.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+25000 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+25027 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+25031 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+25117 INFO: Processing standard module hook 'hook-cryptography.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+26145 INFO: hook-cryptography: cryptography does not seem to be using dynamically linked OpenSSL.
+26462 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+26464 INFO: SetuptoolsInfo: initializing cached setuptools info...
+27143 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+27268 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+27944 INFO: Processing standard module hook 'hook-pyodbc.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\jaydebeapi\__init__.py:188: SyntaxWarning: invalid escape sequence '\d'
+  ver_match = re.match('\d+\.\d+', jpype.__version__)
+28035 INFO: Processing standard module hook 'hook-jpype.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\jpype\\_pyinstaller'
+28144 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28350 INFO: Processing module hooks (post-graph stage)...
+28565 INFO: Performing binary vs. data reclassification (130 entries)
+28581 INFO: Looking for ctypes DLLs
+28590 INFO: Analyzing run-time hooks ...
+28591 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+28594 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+28595 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+28597 INFO: Including run-time hook 'pyi_rth_cryptography_openssl.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks'
+28597 INFO: Including run-time hook 'pyi_rth_pyqt6.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+28599 INFO: Processing pre-find-module-path hook 'hook-_pyi_rth_utils.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+28600 INFO: Processing standard module hook 'hook-_pyi_rth_utils.py' from 'C:\\Users\\AmkorAdmin\\Desktop\\Hacker\\HSql\\venv\\Lib\\site-packages\\PyInstaller\\hooks'
+28608 INFO: Creating base_library.zip...
+28626 INFO: Looking for dynamic libraries
+Traceback (most recent call last):
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\building\build_main.py", line 287, in find_binary_dependencies
+    child.call(import_library, package)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\isolated\_parent.py", line 322, in call
+    raise SubprocessDiedError(
+    ...<2 lines>...
+    ) from None
+PyInstaller.isolated._parent.SubprocessDiedError: Child process died calling import_library() with args=('jpype',) and kwargs={}. Its exit code was 3221225477.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Scripts\pyinstaller.exe\__main__.py", line 6, in <module>
+    sys.exit(_console_script_run())
+             ~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\__main__.py", line 231, in _console_script_run
+    run()
+    ~~~^^
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\__main__.py", line 215, in run
+    run_build(pyi_config, spec_file, **vars(args))
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\__main__.py", line 70, in run_build
+    PyInstaller.building.build_main.main(pyi_config, spec_file, **kwargs)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\building\build_main.py", line 1275, in main
+    build(specfile, distpath, workpath, clean_build)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\building\build_main.py", line 1213, in build
+    exec(code, spec_namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "HSql.spec", line 4, in <module>
+    a = Analysis(
+        ['main.py'],
+    ...<9 lines>...
+        optimize=0,
+    )
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\building\build_main.py", line 584, in __init__
+    self.__postinit__()
+    ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\building\datastruct.py", line 184, in __postinit__
+    self.assemble()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\building\build_main.py", line 967, in assemble
+    find_binary_dependencies(self.binaries, collected_packages, self.graph._bindepend_symlink_suppression)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\AmkorAdmin\Desktop\Hacker\HSql\venv\Lib\site-packages\PyInstaller\building\build_main.py", line 291, in find_binary_dependencies
+    raise isolated.SubprocessDiedError(
+    ...<2 lines>...
+    ) from e
+PyInstaller.isolated._parent.SubprocessDiedError: Isolated subprocess crashed while importing package 'jpype'! Package import list: ['PyQt6', 'importlib', 'importlib.metadata', 'urllib', 'logging', 'importlib.resources', 'zipfile', 'zipfile._path', 'pathlib', 'email', 'json', '_pyi_rth_utils', 'xmlrpc', 'xml.parsers', 'xml', 'http', 'xml.sax', 'ctypes', 'sysconfig', 'multiprocessing.dummy', 'multiprocessing', 'jpype', 'asyncio', 'concurrent.futures', 'concurrent', 'packaging', 'jaydebeapi', 'oracledb', 'sqlparse', 'sqlparse.filters', 'sqlparse.engine', 'pymysql', 'cryptography', 'cryptography.hazmat.bindings.openssl', 'cryptography.hazmat.bindings', 'cryptography.hazmat', 'cryptography.hazmat.decrepit.ciphers', 'cryptography.hazmat.decrepit', 'cryptography.hazmat.primitives.ciphers', 'cryptography.hazmat.backends.openssl', 'cryptography.hazmat.primitives.asymmetric', 'cryptography.hazmat.primitives.serialization', 'cryptography.hazmat.primitives', 'cryptography.hazmat.backends', 'pymysql.constants', 're', 'encodings', 'collections', 'components', 'sqlite3']
