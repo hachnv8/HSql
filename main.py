@@ -1,8 +1,8 @@
 import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QSplitter, QStatusBar, QToolBar, 
-                             QWidget, QTabWidget, QLabel, QToolButton, QHBoxLayout)
+                             QWidget, QTabWidget, QLabel, QToolButton, QHBoxLayout, QMenu)
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont, QKeySequence, QShortcut
+from PyQt6.QtGui import QFont, QKeySequence, QShortcut, QAction
 
 from components.sidebar import DatabaseExplorer
 from components.console import SqlConsole
@@ -45,9 +45,29 @@ class HSqlMainWindow(QMainWindow):
                 color: #bcbec4; background-color: #2b2d30; border-top: 2px solid #375fad;
             }
         """)
+        self.tabs.setTabsClosable(True)
+        self.tabs.tabCloseRequested.connect(self.close_tab)
+        
+        # Context menu for Tab Bar
+        self.tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tabs.tabBar().customContextMenuRequested.connect(self.show_tab_context_menu)
         
         self.console = SqlConsole(self)
-        self.tabs.addTab(self.console, "console")
+        
+        # Apply default DB if exists
+        from components.db_store import get_connections
+        connections = get_connections()
+        default_tab_name = "console"
+        for conn in connections:
+            if conn[7]: # database_name is at index 7
+                conn_id = conn[0]
+                db_name = conn[7]
+                conn_name = conn[1]
+                self.console.set_database_context(conn_id, db_name)
+                default_tab_name = f"{db_name} ({conn_name})"
+                break
+                
+        self.tabs.addTab(self.console, default_tab_name)
         
         self.splitter = QSplitter(Qt.Orientation.Vertical)
         self.splitter.addWidget(self.tabs)
@@ -74,6 +94,9 @@ class HSqlMainWindow(QMainWindow):
     def setup_shortcuts(self):
         # Alt+Insert mapping to Sidebar's Add Connection
         QShortcut(QKeySequence("Alt+Insert"), self).activated.connect(self.explorer.open_connection_dialog)
+        
+        # Ctrl+F4 to Close Current Tab
+        QShortcut(QKeySequence("Ctrl+F4"), self).activated.connect(lambda: self.close_tab(self.tabs.currentIndex()))
 
     def set_active_database(self, conn_id, db_name):
         current_console = self.tabs.currentWidget()
@@ -84,12 +107,24 @@ class HSqlMainWindow(QMainWindow):
     def display_results(self, headers, rows):
         self.results.update_data(headers, rows)
 
-    def open_new_console(self, name, conn_id=None):
+    def open_new_console(self, name, conn_id=None, db_name=None):
+        if conn_id and not db_name:
+            from components.db_store import get_connection
+            conn_data = get_connection(conn_id)
+            if conn_data and conn_data[7]:
+                db_name = conn_data[7]
+                
         new_console = SqlConsole(self)
         new_console.current_conn_id = conn_id
-        idx = self.tabs.addTab(new_console, f"console ({name})")
+        
+        tab_name = f"console ({name})"
+        if db_name:
+            tab_name = f"{db_name} ({name})"
+            new_console.set_database_context(conn_id, db_name)
+            
+        idx = self.tabs.addTab(new_console, tab_name)
         self.tabs.setCurrentIndex(idx)
-        self.statusBar.showMessage(f"Connected context switched to ({name})", 5000)
+        self.statusBar.showMessage(f"Opened new console for {db_name or name}", 5000)
 
     def createLeftToolbar(self):
         toolbar = QToolBar("Main Left Toolbar")
@@ -120,6 +155,59 @@ class HSqlMainWindow(QMainWindow):
         toolbar.addWidget(btn_settings)
         
         self.addToolBar(Qt.ToolBarArea.LeftToolBarArea, toolbar)
+        
+    def close_tab(self, index):
+        if index != -1:
+            widget = self.tabs.widget(index)
+            self.tabs.removeTab(index)
+            if widget:
+                widget.deleteLater()
+
+    def show_tab_context_menu(self, position):
+        index = self.tabs.tabBar().tabAt(position)
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu { background-color: #2b2d30; color: #bcbec4; border: 1px solid #1e1f22; }
+            QMenu::item { padding: 6px 30px; }
+            QMenu::item:selected { background-color: #2f65ca; color: white; }
+        """)
+        
+        close_action = QAction("Close", self)
+        close_action.setShortcut("Ctrl+F4")
+        close_action.triggered.connect(lambda: self.close_tab(index))
+        menu.addAction(close_action)
+        
+        close_others_action = QAction("Close Other Tabs", self)
+        close_others_action.triggered.connect(lambda: self.close_other_tabs(index))
+        menu.addAction(close_others_action)
+        
+        close_all_action = QAction("Close All Tabs", self)
+        close_all_action.triggered.connect(self.close_all_tabs)
+        menu.addAction(close_all_action)
+        
+        close_right_action = QAction("Close Tabs to the Right", self)
+        close_right_action.triggered.connect(lambda: self.close_tabs_to_right(index))
+        menu.addAction(close_right_action)
+        
+        if index == -1:
+            close_action.setEnabled(False)
+            close_others_action.setEnabled(False)
+            close_right_action.setEnabled(False)
+            
+        menu.exec(self.tabs.tabBar().mapToGlobal(position))
+
+    def close_other_tabs(self, index):
+        for i in range(self.tabs.count() - 1, -1, -1):
+            if i != index:
+                self.close_tab(i)
+
+    def close_all_tabs(self):
+        for i in range(self.tabs.count() - 1, -1, -1):
+            self.close_tab(i)
+
+    def close_tabs_to_right(self, index):
+        for i in range(self.tabs.count() - 1, index, -1):
+            self.close_tab(i)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

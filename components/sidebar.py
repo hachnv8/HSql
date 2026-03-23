@@ -80,6 +80,15 @@ class DatabaseExplorer(QDockWidget):
             main_window = self.window()
             if hasattr(main_window, "set_active_database"):
                 main_window.set_active_database(conn_id, db_name)
+        elif node_type == "connection":
+            conn_id = item.data(Qt.ItemDataRole.UserRole)
+            from components.db_store import get_connection
+            conn_data = get_connection(conn_id)
+            if conn_data and conn_data[7]: # database_name is at index 7
+                db_name = conn_data[7]
+                main_window = self.window()
+                if hasattr(main_window, "set_active_database"):
+                    main_window.set_active_database(conn_id, db_name)
 
     def on_context_menu(self, position):
         index = self.treeView.indexAt(position)
@@ -95,7 +104,7 @@ class DatabaseExplorer(QDockWidget):
         raw_text = item.text()
         name = raw_text.split(" ")[1] if " " in raw_text else "Connection"
         
-        if node_type == "connection":
+        if node_type == "connection" or node_type == "database":
             menu = QMenu()
             menu.setStyleSheet("""
                 QMenu { background-color: #3c3f41; color: #a9b7c6; border: 1px solid #2b2b2b; }
@@ -106,15 +115,41 @@ class DatabaseExplorer(QDockWidget):
             
             new_menu = menu.addMenu("+ New")
             new_console_action = new_menu.addAction("Query Console")
-            menu.addSeparator()
-            prop_action = menu.addAction("Properties")
+            
+            set_default_action = None
+            if node_type == "database":
+                menu.addSeparator()
+                set_default_action = menu.addAction("Choose as default db")
+            
+            if node_type == "connection":
+                menu.addSeparator()
+                prop_action = menu.addAction("Properties")
+            else:
+                prop_action = None
             
             action = menu.exec(self.treeView.viewport().mapToGlobal(position))
             if action == new_console_action:
                 main_window = self.window()
                 if hasattr(main_window, "open_new_console"):
-                    main_window.open_new_console(name, conn_id)
-            elif action == prop_action:
+                    if node_type == "database":
+                        db_name = item.data(Qt.ItemDataRole.UserRole + 3)
+                        # Get connection name from parent
+                        conn_name = item.parent().text().split(" ")[1] if item.parent() else "Conn"
+                        main_window.open_new_console(conn_name, conn_id, db_name)
+                    else:
+                        main_window.open_new_console(name, conn_id)
+            elif set_default_action and action == set_default_action:
+                from components.db_store import set_default_database
+                db_name = item.data(Qt.ItemDataRole.UserRole + 3)
+                set_default_database(conn_id, db_name)
+                # Refresh Tree to show highlight
+                self.reload_treeview()
+                # Safe status bar access
+                main_win = self.window()
+                sbar = main_win.statusBar() if callable(getattr(main_win, 'statusBar', None)) else getattr(main_win, 'statusBar', None)
+                if sbar:
+                    sbar.showMessage(f"Set {db_name} as default for {name}", 5000)
+            elif prop_action and action == prop_action:
                 self.open_properties(conn_id)
 
     def open_properties(self, conn_id):
@@ -165,13 +200,27 @@ class DatabaseExplorer(QDockWidget):
                 cursor.execute("SHOW DATABASES")
                 dbs = cursor.fetchall()
                 
+            default_db = conn_data[7] if len(conn_data) > 7 else None
+            
             for db in dbs:
                 db_name = db[0]
-                db_item = QStandardItem(f"🗀 {db_name}")
+                is_default = (db_name == default_db)
+                display_name = f"🗀 {db_name}"
+                if is_default:
+                   display_name = f"🗀 {db_name} (default)"
+                
+                db_item = QStandardItem(display_name)
                 db_item.setData("database", Qt.ItemDataRole.UserRole + 1)
                 db_item.setData(conn_id, Qt.ItemDataRole.UserRole)
                 db_item.setData(db_name, Qt.ItemDataRole.UserRole + 3)
                 db_item.setEditable(False)
+                
+                if is_default:
+                    from PyQt6.QtGui import QColor, QFont
+                    db_item.setForeground(QColor("#629755")) # IntelliJ Green
+                    font = db_item.font()
+                    font.setBold(True)
+                    db_item.setFont(font)
                 
                 db_item.appendRow(QStandardItem("Loading..."))
                 item.appendRow(db_item)

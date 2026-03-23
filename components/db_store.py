@@ -162,3 +162,18 @@ def save_connection(data):
             conn.commit()
         finally:
             conn.close()
+
+def set_default_database(conn_id, db_name):
+    if ENVIRONMENT == "local":
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE connections SET database_name = ? WHERE id = ?", (db_name, conn_id))
+            conn.commit()
+    else:
+        conn = get_mysql_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE connections SET database_name = %s WHERE id = %s", (db_name, conn_id))
+            conn.commit()
+        finally:
+            conn.close()

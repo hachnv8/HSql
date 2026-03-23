@@ -137,22 +137,47 @@ class SqlConsole(QWidget):
         
         # The original code had a loop for these, but the diff implies specific buttons.
         # I'll keep the original loop structure for now, as the diff was fragmented here.
-        for text in ["◷", "P", "⛭"]:
-            btn = QToolButton()
-            btn.setText(text)
-            self.toolbar.addWidget(btn)
+        # Loop for extra buttons - removed per user request
+        # for text in ["◷", "P", "⛭"]:
+        #     btn = QToolButton()
+        #     btn.setText(text)
+        #     self.toolbar.addWidget(btn)
             
-        self.toolbar.addSeparator()
+        # self.toolbar.addSeparator()
         
-        tx_combo = QComboBox()
-        tx_combo.addItems(["Tx: Auto"])
-        self.toolbar.addWidget(tx_combo)
+        # tx_combo = QComboBox()
+        # tx_combo.addItems(["Tx: Auto"])
+        # self.toolbar.addWidget(tx_combo)
         
         self.schema_combo = QComboBox()
         self.schema_combo.addItems(["<schema>"])
         self.toolbar.addWidget(self.schema_combo)
         
+        # Add Stretch to push the close button to the right
+        spacer = QWidget()
+        spacer.setSizePolicy(spacer.sizePolicy().Policy.Expanding, spacer.sizePolicy().Policy.Preferred)
+        self.toolbar.addWidget(spacer)
+        
+        close_btn = QToolButton()
+        close_btn.setText("✕")
+        close_btn.setStyleSheet("color: #bcbec4; font-size: 14px; font-weight: bold;")
+        close_btn.setToolTip("Close Console")
+        close_btn.clicked.connect(self.close_self)
+        self.toolbar.addWidget(close_btn)
+        
         self.layout.addWidget(self.toolbar)
+
+    def close_self(self):
+        main_window = self.window()
+        if hasattr(main_window, 'tabs'):
+            idx = main_window.tabs.indexOf(self)
+            if idx != -1:
+                # Use the close_tab method in main_window if it exists
+                if hasattr(main_window, 'close_tab'):
+                    main_window.close_tab(idx)
+                else:
+                    main_window.tabs.removeTab(idx)
+                    self.deleteLater()
 
     def setup_shortcuts(self):
         # Ctrl+Enter to Execute
@@ -173,6 +198,9 @@ class SqlConsole(QWidget):
         # Ctrl+S to Save and Ctrl+O to Open
         QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self.save_file)
         QShortcut(QKeySequence("Ctrl+O"), self).activated.connect(self.open_file)
+        
+        # Ctrl+Shift+F to Format Code
+        QShortcut(QKeySequence("Ctrl+Shift+F"), self).activated.connect(self.format_sql)
         
     def set_database_context(self, conn_id, db_name):
         self.current_conn_id = conn_id
@@ -395,6 +423,30 @@ class SqlConsole(QWidget):
             except Exception as e:
                 from PyQt6.QtWidgets import QMessageBox
                 QMessageBox.critical(self, "Lỗi", f"Lỗi khi mở file: {e}")
+
+    def format_sql(self):
+        try:
+            import sqlparse
+            text = self.editor.toPlainText()
+            if not text.strip(): return
+            
+            formatted = sqlparse.format(text, reindent=True, keyword_case='upper')
+            
+            if formatted == text:
+                return
+
+            cursor = self.editor.textCursor()
+            cursor.beginEditBlock()
+            cursor.select(QTextCursor.SelectionType.Document)
+            cursor.insertText(formatted)
+            cursor.endEditBlock()
+            
+            # Restore cursor position (approximate)
+            # cursor.setPosition(min(pos, len(formatted))) 
+            # Note: insertText leaves cursor at the end, so we might want to reset it
+            self.editor.setTextCursor(cursor)
+        except Exception as e:
+            print(f"Format error: {e}")
 
     def toggle_comment(self):
         cursor = self.editor.textCursor()
