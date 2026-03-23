@@ -8,37 +8,59 @@ DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'hsql.db')
 # Cấu hình môi trường mặc định
 ENVIRONMENT = "local"
 DB_HOST = "localhost"
+DB_PORT = 3306
 DB_USER = "root"
 DB_PASSWORD = ""
 DB_NAME = "portfolio_db"
 
 def set_environment(env):
-    global ENVIRONMENT, DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
+    global ENVIRONMENT, DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
     ENVIRONMENT = env
     
     # Đọc config.ini nếu chạy trên production (Linux)
     if ENVIRONMENT == "production":
-        config_file = os.path.join(os.path.dirname(__file__), '..', 'config.ini')
-        if os.path.exists(config_file):
-            config = configparser.ConfigParser()
-            config.read(config_file, encoding="utf-8")
-            if 'database' in config:
-                db_config = config['database']
+        # Thử tìm ở nhiều vị trí để chắc chắn (gốc project hoặc cùng thư mục components)
+        possible_paths = [
+            os.path.join(os.path.dirname(__file__), '..', 'config.ini'),
+            os.path.join(os.getcwd(), 'config.ini'),
+            'config.ini'
+        ]
+        
+        config_file = None
+        for p in possible_paths:
+            if os.path.exists(p):
+                config_file = p
+                break
                 
-                DB_HOST = db_config.get("host", "10.201.11.115")
-                DB_USER = db_config.get("username", "root")
-                DB_PASSWORD = db_config.get("password", "")
-                DB_NAME = db_config.get("database", "portfolio_db")
-
+        if config_file:
+            try:
+                config = configparser.ConfigParser()
+                config.read(config_file, encoding="utf-8")
+                if 'database' in config:
+                    db_config = config['database']
+                    DB_HOST = db_config.get("host", "10.201.11.115")
+                    DB_PORT = int(db_config.get("port", "3306"))
+                    DB_USER = db_config.get("username", "root")
+                    DB_PASSWORD = db_config.get("password", "")
+                    DB_NAME = db_config.get("database", "portfolio_db")
+                    print(f"Loaded config from {config_file}: {DB_HOST}:{DB_PORT}")
+            except Exception as e:
+                print(f"Error reading config.ini: {e}")
+        else:
+            print("Warning: config.ini NOT FOUND. Using default production settings.")
+            DB_HOST = "10.201.11.115"
+            DB_PORT = 3306
 
 def get_mysql_connection():
     import pymysql
     # Sử dụng con trỏ mặc định (tuple) để tương thích với output của sqlite3
     return pymysql.connect(
         host=DB_HOST,
+        port=DB_PORT,
         user=DB_USER,
         password=DB_PASSWORD,
-        database=DB_NAME
+        database=DB_NAME,
+        connect_timeout=10
     )
 
 def init_db():
@@ -62,12 +84,13 @@ def init_db():
         # Nếu chưa có DB, tạo mới cho Production
         import pymysql
         try:
-            temp_conn = pymysql.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD)
+            temp_conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD)
             with temp_conn.cursor() as temp_cursor:
                 temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME}")
             temp_conn.commit()
             temp_conn.close()
-        except:
+        except Exception as e:
+            print(f"Error creating production database: {e}")
             pass
 
         conn = get_mysql_connection()
