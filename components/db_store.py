@@ -221,6 +221,27 @@ def get_default_database(conn_id):
         return conn_data[7]
     return None
 
+def init_jvm():
+    """
+    Initializes the JVM early to prevent Segmentation Faults when using JPype with PyQt6.
+    """
+    import os
+    try:
+        import jpype
+        if not jpype.isJVMStarted():
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            jar_path = os.path.join(project_root, "drivers", "jt400.jar")
+            if os.path.exists(jar_path):
+                # Start JVM with jar_path included
+                jpype.startJVM(jpype.getDefaultJVMPath(), classpath=[jar_path], convertStrings=True)
+                print("--- JVM Initialized successfully ---")
+            else:
+                # Still start JVM even if jar missing (can be added to classpath later or handled)
+                jpype.startJVM(jpype.getDefaultJVMPath(), convertStrings=True)
+                print("--- JVM Initialized (without it400.jar) ---")
+    except Exception as e:
+        print(f"--- Warning: Failed to pre-init JVM: {e} ---")
+
 def get_db_connection(conn_id, database_name=None):
     """
     Returns a unified connection object based on the connection type.
@@ -262,6 +283,7 @@ def get_db_connection(conn_id, database_name=None):
     elif "DB2" in db_type:
         import jaydebeapi
         import os
+        import jpype
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         jar_path = os.path.join(project_root, "drivers", "jt400.jar")
         
@@ -275,6 +297,12 @@ def get_db_connection(conn_id, database_name=None):
             url += f":{port}"
             
         driver_class = "com.ibm.as400.access.AS400JDBCDriver"
-        return jaydebeapi.connect(driver_class, url, [user, password], jar_path)
+        
+        # Ensure JVM is started
+        if not jpype.isJVMStarted():
+            return jaydebeapi.connect(driver_class, url, [user, password], jar_path)
+        else:
+            # Reusing already started JVM
+            return jaydebeapi.connect(driver_class, url, [user, password])
         
     return None

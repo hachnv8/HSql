@@ -1,4 +1,8 @@
 import sys
+from components.db_store import init_db, set_environment, init_jvm
+# Khởi tạo JVM sớm nhất có thể để tránh xung đột với PyQt6
+init_jvm()
+
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QSplitter, QStatusBar, QToolBar, 
                              QWidget, QTabWidget, QLabel, QToolButton, QHBoxLayout, QMenu)
 from PyQt6.QtCore import Qt, QSize
@@ -7,7 +11,6 @@ from PyQt6.QtGui import QFont, QKeySequence, QShortcut, QAction
 from components.sidebar import DatabaseExplorer
 from components.console import SqlConsole
 from components.results import ResultsGrid
-from components.db_store import init_db, set_environment
 
 class HSqlMainWindow(QMainWindow):
     def __init__(self):
