@@ -66,6 +66,19 @@ class SqlTextEdit(QTextEdit):
         tc_check = self.textCursor()
         # Move left by the length of the currently typed word
         tc_check.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, len(completionPrefix))
+        
+        # Check if we just typed a dot '.' after a schema name
+        # If the prefix ends with '.' or we just typed '.', we want to trigger schema table loading
+        if e.text() == "." or (completionPrefix and completionPrefix.endswith(".")):
+            word_before_dot = completionPrefix.rstrip(".").upper()
+            if hasattr(self, 'sql_schemas') and word_before_dot in self.sql_schemas:
+                parent_console = self.parent() if not hasattr(self, 'parent_console') else self.parent_console
+                # Find the actual SqlConsole parent
+                while parent_console and not hasattr(parent_console, 'fetch_schema_tables'):
+                    parent_console = parent_console.parent()
+                if parent_console:
+                    parent_console.fetch_schema_tables(word_before_dot)
+
         # Now move to previous word to find context
         tc_check.movePosition(QTextCursor.MoveOperation.PreviousWord, QTextCursor.MoveMode.KeepAnchor)
         prev_word = tc_check.selectedText().strip().upper()
@@ -244,6 +257,7 @@ class SqlConsole(QWidget):
     def update_autocomplete(self, conn_id, db_name):
         keywords = ["SELECT", "FROM", "WHERE", "INSERT", "INTO", "UPDATE", "DELETE", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "ON", "GROUP BY", "ORDER BY", "HAVING", "LIMIT", "OFFSET", "CREATE", "ALTER", "DROP", "TABLE", "DATABASE", "INDEX", "VIEW", "AS", "AND", "OR", "NOT", "IS", "NULL", "PRIMARY KEY", "FOREIGN KEY", "REFERENCES", "SET", "VALUES", "ALTER TABLE", "ADD COLUMN", "CHANGE COLUMN"]
         tables = []
+        schemas = []
         if conn_id:
             try:
                 from components.db_store import get_db_connection, get_connection
@@ -256,6 +270,7 @@ class SqlConsole(QWidget):
                 if conn:
                     cur = conn.cursor()
                     try:
+                        # 1. Fetch tables from current schema
                         if "MySQL" in db_type:
                             if db_name: cur.execute("SHOW TABLES")
                             else: cur.execute("SHOW DATABASES")
@@ -267,10 +282,21 @@ class SqlConsole(QWidget):
                             else: cur.execute("SELECT name FROM sys.databases")
                         elif "DB2" in db_type:
                             if db_name: cur.execute("SELECT TABLE_NAME FROM QSYS2.SYSTABLES WHERE TABLE_SCHEMA = ?", (db_name,))
-                            else: cur.execute("SELECT SCHEMA_NAME FROM QSYS2.SYSSCHEMAS")
                         
                         rows = cur.fetchall()
                         tables = [str(r[0]) for r in rows]
+                        
+                        # 2. Fetch all available schemas/libraries for multi-schema support
+                        if "DB2" in db_type:
+                            cur.execute("SELECT SCHEMA_NAME FROM QSYS2.SYSSCHEMAS ORDER BY SCHEMA_NAME")
+                            schemas = [str(r[0]) for r in cur.fetchall()]
+                        elif "MySQL" in db_type:
+                            cur.execute("SHOW DATABASES")
+                            schemas = [str(r[0]) for r in cur.fetchall()]
+                        elif "SQL Server" in db_type:
+                            cur.execute("SELECT name FROM sys.databases")
+                            schemas = [str(r[0]) for r in cur.fetchall()]
+                            
                     finally:
                         cur.close()
                     # Only close if it was a temporary connection
@@ -279,12 +305,55 @@ class SqlConsole(QWidget):
             except Exception:
                 pass
         
-        word_list = keywords + tables
-        
         self.editor.sql_keywords = keywords
         self.editor.sql_tables = tables
+        self.editor.sql_schemas = schemas
         self.editor._last_context_was_table = False
         
+        self.refresh_completer_model()
+
+    def fetch_schema_tables(self, schema_name):
+        """Fetches tables for a specific schema dynamically (triggered by '.')"""
+        if not self.current_conn_id: return
+        
+        try:
+            from components.db_store import get_db_connection, get_connection
+            conn_data = get_connection(self.current_conn_id)
+            db_type = conn_data[2]
+            
+            conn = self.active_conn if self.active_conn else get_db_connection(self.current_conn_id, schema_name)
+            if conn:
+                cur = conn.cursor()
+                try:
+                    if "DB2" in db_type:
+                        cur.execute("SELECT TABLE_NAME FROM QSYS2.SYSTABLES WHERE TABLE_SCHEMA = ?", (schema_name,))
+                    elif "MySQL" in db_type:
+                        cur.execute(f"SHOW TABLES FROM `{schema_name}`")
+                    elif "SQL Server" in db_type:
+                        cur.execute("SELECT table_name FROM information_schema.tables WHERE table_catalog = ?", (schema_name,))
+                    
+                    new_tables = [str(r[0]) for r in cur.fetchall()]
+                    
+                    # Add new tables to the existing list (merging)
+                    # Use a set to avoid duplicates
+                    all_tables = list(set(self.editor.sql_tables + new_tables))
+                    self.editor.sql_tables = all_tables
+                    
+                    self.refresh_completer_model()
+                    
+                finally:
+                    cur.close()
+                if not self.active_conn:
+                    conn.close()
+        except Exception:
+            pass
+
+    def refresh_completer_model(self):
+        keywords = getattr(self.editor, 'sql_keywords', [])
+        tables = getattr(self.editor, 'sql_tables', [])
+        schemas = getattr(self.editor, 'sql_schemas', [])
+        
+        word_list = list(set(keywords + tables + schemas))
         model = QStringListModel(word_list)
         self.completer.setModel(model)
 

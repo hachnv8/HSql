@@ -217,9 +217,17 @@ def set_default_database(conn_id, db_name):
 
 def get_default_database(conn_id):
     conn_data = get_connection(conn_id)
-    if conn_data and len(conn_data) > 7:
-        return conn_data[7]
-    return None
+def get_resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    import sys
+    import os
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    return os.path.join(base_path, relative_path)
 
 def init_jvm():
     """
@@ -229,8 +237,7 @@ def init_jvm():
     try:
         import jpype
         if not jpype.isJVMStarted():
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            jar_path = os.path.join(project_root, "drivers", "jt400.jar")
+            jar_path = get_resource_path(os.path.join("drivers", "jt400.jar"))
             if os.path.exists(jar_path):
                 # Start JVM with jar_path included
                 jpype.startJVM(jpype.getDefaultJVMPath(), classpath=[jar_path], convertStrings=True)
@@ -284,8 +291,7 @@ def get_db_connection(conn_id, database_name=None):
         import jaydebeapi
         import os
         import jpype
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        jar_path = os.path.join(project_root, "drivers", "jt400.jar")
+        jar_path = get_resource_path(os.path.join("drivers", "jt400.jar"))
         
         if not os.path.exists(jar_path):
             raise FileNotFoundError(f"Missing JDBC Driver: {jar_path}")

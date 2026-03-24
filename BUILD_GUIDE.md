@@ -56,5 +56,6 @@ The final executable will be created in:
 - `dist/HSql.exe`
 
 ## 6. Deployment Notes
-- When moving the `HSql.exe` to another machine, you must also copy the `drivers/` folder (with `jt400.jar`) to the same location if you want to use DB2 features.
-- Ensure the target machine has the **Java Runtime Environment (JRE)** installed for `jt400.jar` to work.
+- **Portability:** The `HSql.exe` is a standalone file. All internal components and the `drivers/` folder (with `jt400.jar`) are already bundled inside.
+- **Java Requirement:** The **Java Runtime Environment (JRE)** (OpenJDK 11+) **MUST** be installed on the target machine for DB2/iSeries connections to work. The app will search for the default system JVM.
+- **Visual C++ Redistributable:** Ensure the target machine has the latest Microsoft Visual C++ Redistributable installed (usually standard on Windows).
