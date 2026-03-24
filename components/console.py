@@ -35,6 +35,13 @@ class SqlTextEdit(QTextEdit):
             self.completer.setWidget(self)
         super().focusInEvent(e)
 
+    def insertFromMimeData(self, source):
+        # Force plain text paste to ignore external formatting (fonts, colors, etc.)
+        if source.hasText():
+            self.insertPlainText(source.text())
+        else:
+            super().insertFromMimeData(source)
+
     def keyPressEvent(self, e):
         if self.completer and self.completer.popup().isVisible():
             if e.key() in (Qt.Key.Key_Enter, Qt.Key.Key_Return, Qt.Key.Key_Escape, Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
@@ -87,6 +94,8 @@ class SqlConsole(QWidget):
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
+        self.current_conn_id = None
+        self.active_conn = None # Persistent connection for transactions
         
         self.setup_inline_toolbar()
         
@@ -149,6 +158,22 @@ class SqlConsole(QWidget):
         # tx_combo.addItems(["Tx: Auto"])
         # self.toolbar.addWidget(tx_combo)
         
+        btn_commit = QToolButton()
+        btn_commit.setText("✓")
+        btn_commit.setToolTip("Commit Transaction")
+        btn_commit.setStyleSheet("color: #629755; font-size: 16px; font-weight: bold;")
+        btn_commit.clicked.connect(self.commit_query)
+        self.toolbar.addWidget(btn_commit)
+        
+        btn_rollback = QToolButton()
+        btn_rollback.setText("↺")
+        btn_rollback.setToolTip("Rollback Transaction")
+        btn_rollback.setStyleSheet("color: #cc6600; font-size: 16px; font-weight: bold;")
+        btn_rollback.clicked.connect(self.rollback_query)
+        self.toolbar.addWidget(btn_rollback)
+        
+        self.toolbar.addSeparator()
+        
         self.schema_combo = QComboBox()
         self.schema_combo.addItems(["<schema>"])
         self.toolbar.addWidget(self.schema_combo)
@@ -168,6 +193,13 @@ class SqlConsole(QWidget):
         self.layout.addWidget(self.toolbar)
 
     def close_self(self):
+        if self.active_conn:
+            try:
+                self.active_conn.close()
+            except Exception:
+                pass
+            self.active_conn = None
+            
         main_window = self.window()
         if hasattr(main_window, 'tabs'):
             idx = main_window.tabs.indexOf(self)
@@ -217,7 +249,9 @@ class SqlConsole(QWidget):
                 from components.db_store import get_db_connection, get_connection
                 conn_data = get_connection(conn_id)
                 db_type = conn_data[2]
-                conn = get_db_connection(conn_id, db_name)
+                
+                # Use active connection for autocomplete if available
+                conn = self.active_conn if self.active_conn else get_db_connection(conn_id, db_name)
                 
                 if conn:
                     cur = conn.cursor()
@@ -239,7 +273,9 @@ class SqlConsole(QWidget):
                         tables = [str(r[0]) for r in rows]
                     finally:
                         cur.close()
-                    conn.close()
+                    # Only close if it was a temporary connection
+                    if not self.active_conn:
+                        conn.close()
             except Exception:
                 pass
         
@@ -348,15 +384,25 @@ class SqlConsole(QWidget):
         
         try:
             from components.db_store import get_db_connection
-            conn = get_db_connection(self.current_conn_id, db_name)
-            if not conn:
+            # Reuse or create active connection
+            if not self.active_conn:
+                self.active_conn = get_db_connection(self.current_conn_id, db_name)
+                # Ensure autocommit is off for manual transaction control
+                if hasattr(self.active_conn, 'autocommit'):
+                    try:
+                        self.active_conn.autocommit(False)
+                    except TypeError:
+                        self.active_conn.autocommit = False
+            
+            if not self.active_conn:
                 QMessageBox.critical(self, "Lỗi", "Không thể tạo kết nối tới Database!")
                 return
+                
             affected = 0
             last_headers = None
             last_rows = None
             
-            with conn.cursor() as cur:
+            with self.active_conn.cursor() as cur:
                 for stmt in statements:
                     cur.execute(stmt)
                     if cur.description:
@@ -371,10 +417,33 @@ class SqlConsole(QWidget):
                 if hasattr(main_window, "display_results"):
                     main_window.display_results(last_headers, last_rows)
             else:
-                conn.commit()
-                QMessageBox.information(self, "Thành công", f"Đã chạy lệnh!\nBị ảnh hưởng: {affected} dòng.")
+                # Do NOT commit automatically!
+                # conn.commit() 
+                QMessageBox.information(self, "Thành công", f"Đã chạy lệnh (Chưa commit)!\nBị ảnh hưởng: {affected} dòng.")
         except Exception as e:
+            # If connection lost, clear active_conn
+            self.active_conn = None
             QMessageBox.critical(self, "Lỗi Query", f"{e}")
+
+    def commit_query(self):
+        if not self.active_conn:
+            QMessageBox.information(self, "Commit", "Không có transaction nào đang chờ.")
+            return
+        try:
+            self.active_conn.commit()
+            QMessageBox.information(self, "Commit", "Đã Commit thành công!")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi Commit", f"{e}")
+
+    def rollback_query(self):
+        if not self.active_conn:
+            QMessageBox.information(self, "Rollback", "Không có transaction nào đang chờ.")
+            return
+        try:
+            self.active_conn.rollback()
+            QMessageBox.information(self, "Rollback", "Đã Rollback thành công!")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi Rollback", f"{e}")
 
     def save_file(self):
         from PyQt6.QtWidgets import QFileDialog
