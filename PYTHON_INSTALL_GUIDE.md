@@ -1,60 +1,43 @@
 # Python 3.11 Installation & Setup Guide
 
-This guide describes how to install Python 3.11 and set up the `HSql` project environment on a new machine.
+This guide describes how to install Python 3.11 and set up the `HSql` project environment on any Windows machine (Local or Production).
 
 ## 1. Install Python 3.11.9
-1. **Download:** Go to the official [Python 3.11.9 Release Page](https://www.python.org/downloads/release/python-3119/) and download the **Windows installer (64-bit)**. Or use this direct link: [python-3.11.9-amd64.exe](https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe).
-2. **Run Installer:** Double-click the downloaded `.exe` file.
-3. **Critical Step:** Make sure to check the box **"Add Python 3.11 to PATH"** at the bottom of the installer window.
-4. **Complete Installation:** Follow the prompts to finish the installation.
+1. **Download:** [python-3.11.9-amd64.exe](https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe)
+2. **Run Installer:** Double-click the `.exe`.
+3. **Critical Step:** Check the box **"Add Python 3.11 to PATH"** at the bottom of the installer window.
+4. **Complete Installation.**
 
 ## 2. Verify Installation
-Open a new terminal (Command Prompt or PowerShell) and run:
+Open a terminal (CMD, PowerShell, or Git Bash):
 ```bash
+# Try one of these commands
+python --version
 py -3.11 --version
 ```
 It should return `Python 3.11.9`.
 
-## 3. Project Setup
-Navigate to the project root directory (`HSql` folder) in your terminal.
+## 3. Project Setup (VENV)
+Navigate to the `HSql` folder in your terminal.
 
 ### 3.1 Create Virtual Environment
-Run the following command to create a virtual environment specifically with Python 3.11:
 ```bash
+# Use 'py -3.11' if you have multiple Python versions, or 'python' if 3.11 is your only version
 py -3.11 -m venv venv
 ```
 
 ### 3.2 Activate Virtual Environment
-- **Windows (CMD):**
-  ```cmd
-  venv\Scripts\activate
-  ```
-- **Windows (PowerShell):**
-  ```powershell
-  .\venv\Scripts\Activate.ps1
-  ```
-- **Git Bash:**
-  ```bash
-  source venv/Scripts/activate
-  ```
+- **Git Bash:** `source venv/Scripts/activate`
+- **CMD:** `venv\Scripts\activate`
+- **PowerShell:** `.\venv\Scripts\Activate.ps1`
 
-### 3.3 Update Pip
-Once activated, run:
+### 3.3 Install Dependencies
+While the `(venv)` is active:
 ```bash
 python -m pip install --upgrade pip
-```
-
-### 3.4 Install Dependencies
-Install all required libraries from the `requirements.txt` file:
-```bash
 pip install -r requirements.txt
 ```
 
-## 4. Running the Application
-While the `venv` is active, run the main script:
-```bash
-python main.py
-```
-
----
-**Note:** For building the executable, refer to the [BUILD_GUIDE.md](BUILD_GUIDE.md) file.
+## 4. Run or Build
+- **Run:** `python main.py`
+- **Build EXE:** See [BUILD_GUIDE.md](BUILD_GUIDE.md) for steps using the `.spec` file.
