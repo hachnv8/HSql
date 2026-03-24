@@ -1,6 +1,7 @@
 # === PyInstaller Build ===
 build/
 dist/
+!dist/HSql.exe
 *.spec
 
 # === Python Cache ===

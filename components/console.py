@@ -123,6 +123,7 @@ class SqlConsole(QWidget):
                 border: none;
                 padding: 10px;
                 selection-background-color: #214283;
+                font-family: 'JetBrains Mono', Consolas, monospace;
             }
         """)
         
