@@ -140,9 +140,15 @@ def init_db():
                     port INT,
                     username VARCHAR(255),
                     password VARCHAR(255),
-                    database_name VARCHAR(255)
+                    database_name VARCHAR(255),
+                    is_default INT DEFAULT 0
                 )
             ''')
+            # Migration to add is_default if not exists
+            try:
+                cursor.execute("ALTER TABLE connections ADD COLUMN is_default INT DEFAULT 0")
+            except Exception:
+                pass
         conn.commit()
     finally:
         conn.close()
@@ -151,7 +157,7 @@ def get_connections():
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections")
+            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name, is_default FROM connections")
             return cursor.fetchall()
     finally:
         conn.close()
@@ -160,7 +166,7 @@ def get_connection(conn_id):
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections WHERE id = %s", (conn_id,))
+            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name, is_default FROM connections WHERE id = %s", (conn_id,))
             return cursor.fetchone()
     finally:
         conn.close()
@@ -213,11 +219,11 @@ def save_connection(data):
     try:
         with conn.cursor() as cursor:
             if 'id' in data:
-                query = "UPDATE connections SET name=%s, db_type=%s, host=%s, port=%s, username=%s, password=%s, database_name=%s WHERE id=%s"
-                cursor.execute(query, (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], data['id']))
+                query = "UPDATE connections SET name=%s, db_type=%s, host=%s, port=%s, username=%s, password=%s, database_name=%s, is_default=%s WHERE id=%s"
+                cursor.execute(query, (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], data.get('is_default', 0), data['id']))
             else:
-                query = "INSERT INTO connections (name, db_type, host, port, username, password, database_name) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                cursor.execute(query, (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name']))
+                query = "INSERT INTO connections (name, db_type, host, port, username, password, database_name, is_default) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+                cursor.execute(query, (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], data.get('is_default', 0)))
         conn.commit()
     finally:
         conn.close()
@@ -226,13 +232,29 @@ def set_default_database(conn_id, db_name):
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("UPDATE connections SET database_name = %s WHERE id = %s", (db_name, conn_id))
+            # First, unset all defaults globally
+            cursor.execute("UPDATE connections SET is_default = 0, database_name = NULL")
+            # Then set this connection and this db as the sole default
+            cursor.execute("UPDATE connections SET is_default = 1, database_name = %s WHERE id = %s", (db_name, conn_id))
         conn.commit()
     finally:
         conn.close()
 
 def get_default_database(conn_id):
     conn_data = get_connection(conn_id)
+    return conn_data[7] if conn_data else None
+
+def set_connection_as_default(conn_id):
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cursor:
+            # First, unset all globally (including database_names)
+            cursor.execute("UPDATE connections SET is_default = 0, database_name = NULL")
+            # Then set selected
+            cursor.execute("UPDATE connections SET is_default = 1 WHERE id = %s", (conn_id,))
+        conn.commit()
+    finally:
+        conn.close()
 def get_resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     import sys

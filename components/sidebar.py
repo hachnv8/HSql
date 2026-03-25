@@ -124,8 +124,11 @@ class DatabaseExplorer(QDockWidget):
             
             if node_type == "connection":
                 menu.addSeparator()
+                set_default_conn_action = menu.addAction("Set as Default Connection")
+                menu.addSeparator()
                 prop_action = menu.addAction("Properties")
             else:
+                set_default_conn_action = None
                 prop_action = None
             
             action = menu.exec(self.treeView.viewport().mapToGlobal(position))
@@ -160,6 +163,22 @@ class DatabaseExplorer(QDockWidget):
                 sbar = main_win.statusBar() if callable(getattr(main_win, 'statusBar', None)) else getattr(main_win, 'statusBar', None)
                 if sbar:
                     sbar.showMessage(f"Set {db_name} as default for {name}", 5000)
+            elif set_default_conn_action and action == set_default_conn_action:
+                from components.db_store import set_connection_as_default, get_connection
+                set_connection_as_default(conn_id)
+                
+                # Fetch again to get updated state (though we just set it)
+                conn_data = get_connection(conn_id)
+                if conn_data and hasattr(main_window, "set_active_database"):
+                    # Activate context automatically
+                    main_window.set_active_database(conn_id, conn_data[7])
+                
+                self.reload_treeview()
+                # Safe status bar access
+                main_win = self.window()
+                sbar = main_win.statusBar() if callable(getattr(main_win, 'statusBar', None)) else getattr(main_win, 'statusBar', None)
+                if sbar:
+                    sbar.showMessage(f"Set connection '{name}' as overall default and activated", 5000)
             elif prop_action and action == prop_action:
                 self.open_properties(conn_id)
 
@@ -226,18 +245,22 @@ class DatabaseExplorer(QDockWidget):
             
             for db in dbs:
                 db_name = db[0]
-                is_default = (db_name == default_db)
+                # Only Green if this connection is the DEFAULT connection AND this db is its default
+                is_conn_default = (conn_data[8] == 1) if len(conn_data) > 8 else False
+                is_db_default = (db_name == default_db)
+                is_unique_default = is_conn_default and is_db_default
+                
                 display_name = f"🗀 {db_name}"
-                if is_default:
-                   display_name = f"🗀 {db_name} (default)"
+                if is_unique_default:
+                    display_name += " (default)"
                 
                 db_item = QStandardItem(display_name)
-                db_item.setData("database", Qt.ItemDataRole.UserRole + 1)
-                db_item.setData(conn_id, Qt.ItemDataRole.UserRole)
-                db_item.setData(db_name, Qt.ItemDataRole.UserRole + 3)
                 db_item.setEditable(False)
+                db_item.setData(conn_id, Qt.ItemDataRole.UserRole)
+                db_item.setData("database", Qt.ItemDataRole.UserRole + 1)
+                db_item.setData(db_name, Qt.ItemDataRole.UserRole + 3)
                 
-                if is_default:
+                if is_unique_default:
                     from PyQt6.QtGui import QColor, QFont
                     db_item.setForeground(QColor("#629755")) # IntelliJ Green
                     font = db_item.font()
@@ -353,15 +376,35 @@ class DatabaseExplorer(QDockWidget):
             self.rootNode.appendRow(emptyNode)
         else:
             for conn in connections:
-                # 0:id, 1:name, 2:db_type, 3:host, 4:port, 5:user, 6:pass, 7:database_name
+                # 0:id, 1:name, 2:db_type, 3:host, 4:port, 5:user, 6:pass, 7:database_name, 8:is_default
                 conn_id = conn[0]
                 name = conn[1]
                 host = conn[3]
+                is_default_conn = conn[8] if len(conn) > 8 else 0
+                # Only color connection if matches default AND doesn't have a default database
+                # Actually, to be safe and simple: 
+                # If it's the default connection, we'll mark it with (Default) for now.
+                # But we'll ONLY color it green IF it's the intended unique highlight.
                 
-                connectionNode = QStandardItem(f"⛁ {name} @{host}")
+                # Let's get more specific:
+                has_default_db = bool(conn[7])
+                is_unique_default = is_default_conn and not has_default_db
+                
+                display_text = f"⛁ {name} @{host}"
+                if is_unique_default:
+                    display_text += " (Default)"
+                    
+                connectionNode = QStandardItem(display_text)
                 connectionNode.setEditable(False)
                 connectionNode.setData(conn_id, Qt.ItemDataRole.UserRole)
                 connectionNode.setData("connection", Qt.ItemDataRole.UserRole + 1)
+                
+                if is_unique_default:
+                    from PyQt6.QtGui import QColor
+                    connectionNode.setForeground(QColor("#629755")) # Green for Default
+                    font = connectionNode.font()
+                    font.setBold(True)
+                    connectionNode.setFont(font)
                 
                 dummyNode = QStandardItem("Loading...")
                 dummyNode.setEditable(False)
@@ -379,34 +422,25 @@ class DatabaseExplorer(QDockWidget):
         def reset_items(parent_item):
             for row in range(parent_item.rowCount()):
                 child = parent_item.child(row)
-                child.setForeground(QColor("#bcbec4"))
-                font = child.font()
-                font.setBold(False)
-                child.setFont(font)
+                # Check if this is a default connection/db before resetting to gray
+                # We'll check the text but now ONLY ONE will have it
+                text = child.text()
+                if "(Default)" in text or "(default)" in text:
+                    child.setForeground(QColor("#629755")) # Keep Green for Default
+                    font = child.font()
+                    font.setBold(True)
+                    child.setFont(font)
+                else:
+                    child.setForeground(QColor("#bcbec4"))
+                    font = child.font()
+                    font.setBold(False)
+                    child.setFont(font)
+                
                 if child.rowCount() > 0:
                     reset_items(child)
         
         reset_items(self.rootNode)
         
-        # Find and highlight target
-        for row in range(self.rootNode.rowCount()):
-            conn_item = self.rootNode.child(row)
-            if conn_item.data(Qt.ItemDataRole.UserRole) == conn_id:
-                # If db_name is None, highlight the connection itself
-                if db_name is None:
-                    conn_item.setForeground(QColor("#629755")) # Green
-                    font = conn_item.font()
-                    font.setBold(True)
-                    conn_item.setFont(font)
-                else:
-                    # Highlight the specific database under this connection
-                    for sub_row in range(conn_item.rowCount()):
-                        db_item = conn_item.child(sub_row)
-                        if db_item.data(Qt.ItemDataRole.UserRole + 1) == "database" and \
-                           db_item.data(Qt.ItemDataRole.UserRole + 3) == db_name:
-                            db_item.setForeground(QColor("#629755"))
-                            font = db_item.font()
-                            font.setBold(True)
-                            db_item.setFont(font)
-                            break
-                break
+        # Find and highlight target (Removed special color for active context)
+        # We only care about ensuring Defaults stay Green, which reset_items already does.
+        pass

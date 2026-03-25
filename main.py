@@ -62,14 +62,29 @@ class HSqlMainWindow(QMainWindow):
         from components.db_store import get_connections
         connections = get_connections()
         default_tab_name = "console"
+        
+        target_conn = None
+        # Prioritize is_default=1 (index 8)
         for conn in connections:
-            if conn[7]: # database_name is at index 7
-                conn_id = conn[0]
-                db_name = conn[7]
-                conn_name = conn[1]
-                self.console.set_database_context(conn_id, db_name)
-                default_tab_name = f"{db_name} ({conn_name})"
+            if len(conn) > 8 and conn[8]:
+                target_conn = conn
                 break
+        
+        # Fallback to first one with database_name (index 7)
+        if not target_conn:
+            for conn in connections:
+                if conn[7]:
+                    target_conn = conn
+                    break
+        
+        if target_conn:
+            conn_id = target_conn[0]
+            db_name = target_conn[7]
+            conn_name = target_conn[1]
+            self.console.set_database_context(conn_id, db_name)
+            default_tab_name = f"{db_name} ({conn_name})" if db_name else f"{conn_name}"
+            # Highlight in sidebar
+            self.explorer.highlight_active_context(conn_id, db_name)
                 
         self.tabs.addTab(self.console, default_tab_name)
         

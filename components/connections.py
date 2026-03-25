@@ -229,8 +229,10 @@ class ConnectionDialog(QDialog):
             self.user_edit.setText(connection_data[5])
             self.pass_edit.setText(connection_data[6])
             self.database_edit.setText(str(connection_data[7] or ""))
+            self.is_default_val = connection_data[8] if len(connection_data) > 8 else 0
         else:
             self.type_combo.setCurrentText("⛁ MySQL")
+            self.is_default_val = 0
             
         self.update_url()
 
@@ -363,7 +365,8 @@ class ConnectionDialog(QDialog):
             'username': self.user_edit.text(),
             'password': self.pass_edit.text(),
             'database_name': self.database_edit.text(),
-            'is_synced': self.sync_combo.currentIndex() > 0
+            'is_synced': self.sync_combo.currentIndex() > 0,
+            'is_default': getattr(self, 'is_default_val', 0)
         }
 
     def update_url(self):

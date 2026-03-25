@@ -43,7 +43,11 @@ class SqlTextEdit(QTextEdit):
             super().insertFromMimeData(source)
 
     def keyPressEvent(self, e):
-        if self.completer and self.completer.popup().isVisible():
+        if not self.completer:
+            super().keyPressEvent(e)
+            return
+
+        if self.completer.popup().isVisible():
             if e.key() in (Qt.Key.Key_Enter, Qt.Key.Key_Return, Qt.Key.Key_Escape, Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
                 e.ignore()
                 return
@@ -59,37 +63,70 @@ class SqlTextEdit(QTextEdit):
         hasModifier = (e.modifiers() != Qt.KeyboardModifier.NoModifier) and not ctrlOrShift
         completionPrefix = self.textUnderCursor()
 
+        # Custom logic for '.' trigger
+        if e.text() == ".":
+            # For MySQL/Postgres: 'db_name.'
+            # We need the word exactly before the cursor (excluding the dot we just typed)
+            tc = self.textCursor()
+            tc.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, 1)
+            full_text = self.toPlainText()
+            pos = tc.position()
+            
+            # Find the start of the word before the dot
+            start = pos
+            while start > 0 and (full_text[start-1].isalnum() or full_text[start-1] in '_'):
+                start -= 1
+            word_before_dot = full_text[start:pos]
+            
+            # Check if it's a known schema (case-insensitive)
+            schemas_lower = [s.lower() for s in getattr(self, 'sql_schemas', [])]
+            if word_before_dot.lower() in schemas_lower:
+                idx = schemas_lower.index(word_before_dot.lower())
+                actual_schema = self.sql_schemas[idx]
+                
+                parent_console = self.parent()
+                while parent_console and not hasattr(parent_console, 'fetch_schema_tables'):
+                    parent_console = parent_console.parent()
+                if parent_console:
+                    parent_console.fetch_schema_tables(actual_schema)
+                    # For a dot, we want to clear prefix and show new tables immediately
+                    self.completer.setCompletionPrefix("")
+                    cr = self.cursorRect()
+                    cr.setWidth(self.completer.popup().sizeHintForColumn(0) + self.completer.popup().verticalScrollBar().sizeHint().width())
+                    self.completer.complete(cr)
+                    self.completer.popup().setCurrentIndex(self.completer.completionModel().index(0, 0))
+                    return
+
         if not isShortcut and (hasModifier or not e.text() or len(completionPrefix) < 1):
             self.completer.popup().hide()
             return
 
+        # Context-aware model update
         tc_check = self.textCursor()
-        # Move left by the length of the currently typed word
         tc_check.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, len(completionPrefix))
-        
-        # Check if we just typed a dot '.' after a schema name
-        # If the prefix ends with '.' or we just typed '.', we want to trigger schema table loading
-        if e.text() == "." or (completionPrefix and completionPrefix.endswith(".")):
-            word_before_dot = completionPrefix.rstrip(".").upper()
-            if hasattr(self, 'sql_schemas') and word_before_dot in self.sql_schemas:
-                parent_console = self.parent() if not hasattr(self, 'parent_console') else self.parent_console
-                # Find the actual SqlConsole parent
-                while parent_console and not hasattr(parent_console, 'fetch_schema_tables'):
-                    parent_console = parent_console.parent()
-                if parent_console:
-                    parent_console.fetch_schema_tables(word_before_dot)
-
-        # Now move to previous word to find context
         tc_check.movePosition(QTextCursor.MoveOperation.PreviousWord, QTextCursor.MoveMode.KeepAnchor)
         prev_word = tc_check.selectedText().strip().upper()
         
-        is_table_context = prev_word in ["FROM", "JOIN", "INTO", "UPDATE", "TABLE"]
+        # Context-aware model update
+        is_table_context = prev_word in ["FROM", "JOIN", "INTO", "UPDATE", "TABLE", "DESC", "DESCRIBE"]
+        
+        # If we are typing after a dot (db.table), we are still in a "table-like" context
+        # Check if the prefix has a dot at the end or in it
+        if "." in completionPrefix:
+            is_table_context = True
+
         if getattr(self, '_last_context_was_table', None) != is_table_context:
             self._last_context_was_table = is_table_context
+            keywords = getattr(self, 'sql_keywords', [])
+            tables = getattr(self, 'sql_tables', [])
+            schemas = getattr(self, 'sql_schemas', [])
+            
             if is_table_context:
-                model_items = getattr(self, 'sql_tables', [])
+                # Include both tables and schemas (databases) in table context
+                model_items = sorted(list(set(tables + schemas)))
             else:
-                model_items = getattr(self, 'sql_keywords', []) + getattr(self, 'sql_tables', [])
+                model_items = sorted(list(set(keywords + tables + schemas)))
+            
             self.completer.setModel(QStringListModel(model_items))
 
         if completionPrefix != self.completer.completionPrefix():
@@ -100,6 +137,7 @@ class SqlTextEdit(QTextEdit):
         cr.setWidth(self.completer.popup().sizeHintForColumn(0)
                     + self.completer.popup().verticalScrollBar().sizeHint().width())
         self.completer.complete(cr)
+        self.completer.popup().setCurrentIndex(self.completer.completionModel().index(0, 0))
 
 class SqlConsole(QWidget):
     def __init__(self, parent=None):
@@ -282,6 +320,8 @@ class SqlConsole(QWidget):
                     try:
                         if self.current_db_name:
                             if "MySQL" in db_type:
+                                # Ensure we are using the correct database context
+                                cursor.execute(f"USE `{self.current_db_name}`")
                                 cursor.execute("SHOW TABLES")
                             elif "Oracle" in db_type:
                                 cursor.execute("SELECT table_name FROM all_tables WHERE owner = :1", (self.current_db_name,))
@@ -305,6 +345,9 @@ class SqlConsole(QWidget):
                                 cursor.execute("SELECT SCHEMA_NAME FROM QSYS2.SYSSCHEMAS")
                             
                             schemas = [str(r[0]).strip() for r in cursor.fetchall()]
+                            # Exclude internal schemas for better UX
+                            internal = ['information_schema', 'mysql', 'performance_schema', 'sys']
+                            schemas = [s for s in schemas if s.lower() not in internal]
                             self.editor.sql_schemas = schemas
                             self.completer_data += schemas
                             
@@ -315,7 +358,7 @@ class SqlConsole(QWidget):
             except Exception:
                 pass
         
-        self.editor._last_context_was_table = False
+        self.editor._last_context_was_table = None # Force re-calculation on next key
         self.refresh_completer_model()
 
     def fetch_schema_tables(self, schema_name):
@@ -334,9 +377,13 @@ class SqlConsole(QWidget):
                     if "DB2" in db_type:
                         cur.execute("SELECT TABLE_NAME FROM QSYS2.SYSTABLES WHERE TABLE_SCHEMA = ?", (schema_name,))
                     elif "MySQL" in db_type:
+                        # Use backticks for schema name to handle reserved words/spaces
                         cur.execute(f"SHOW TABLES FROM `{schema_name}`")
                     elif "SQL Server" in db_type:
                         cur.execute("SELECT table_name FROM information_schema.tables WHERE table_catalog = ?", (schema_name,))
+                    else:
+                        # Generic attempt
+                        cur.execute(f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{schema_name}'")
                     
                     new_tables = [str(r[0]) for r in cur.fetchall()]
                     
@@ -345,7 +392,7 @@ class SqlConsole(QWidget):
                     all_tables = list(set(self.editor.sql_tables + new_tables))
                     self.editor.sql_tables = all_tables
                     
-                    self.refresh_completer_model()
+                    self.refresh_completer_model(new_tables)
                     
                 finally:
                     cur.close()
@@ -354,12 +401,15 @@ class SqlConsole(QWidget):
         except Exception:
             pass
 
-    def refresh_completer_model(self):
-        keywords = getattr(self.editor, 'sql_keywords', [])
-        tables = getattr(self.editor, 'sql_tables', [])
-        schemas = getattr(self.editor, 'sql_schemas', [])
-        
-        word_list = list(set(keywords + tables + schemas))
+    def refresh_completer_model(self, custom_list=None):
+        if custom_list is not None:
+            word_list = sorted(list(set(custom_list)))
+        else:
+            keywords = getattr(self.editor, 'sql_keywords', [])
+            tables = getattr(self.editor, 'sql_tables', [])
+            schemas = getattr(self.editor, 'sql_schemas', [])
+            word_list = list(set(keywords + tables + schemas))
+            
         model = QStringListModel(word_list)
         self.completer.setModel(model)
 
@@ -452,7 +502,7 @@ class SqlConsole(QWidget):
         if not conn_data: return
         
         db_name = self.schema_combo.currentText()
-        if db_name == "<schema>": db_name = None
+        if db_name in ["<schema>", "<Connection Only>"]: db_name = None
         
         statements = [s.strip() for s in sql.split(';') if s.strip()]
         if not statements: return
