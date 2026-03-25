@@ -664,7 +664,18 @@ class SqlConsole(QWidget):
     def format_sql(self):
         try:
             import sqlparse
-            text = self.editor.toPlainText()
+            from PyQt6.QtGui import QTextCursor
+            
+            cursor = self.editor.textCursor()
+            has_selection = cursor.hasSelection()
+            
+            if has_selection:
+                # Format only selection
+                text = cursor.selectedText().replace('\u2029', '\n')
+            else:
+                # Format everything
+                text = self.editor.toPlainText()
+                
             if not text.strip(): return
             
             formatted = sqlparse.format(text, reindent=True, keyword_case='upper')
@@ -672,15 +683,15 @@ class SqlConsole(QWidget):
             if formatted == text:
                 return
 
-            cursor = self.editor.textCursor()
             cursor.beginEditBlock()
-            cursor.select(QTextCursor.SelectionType.Document)
+            if not has_selection:
+                cursor.select(QTextCursor.SelectionType.Document)
+            
             cursor.insertText(formatted)
             cursor.endEditBlock()
             
-            # Restore cursor position (approximate)
-            # cursor.setPosition(min(pos, len(formatted))) 
-            # Note: insertText leaves cursor at the end, so we might want to reset it
+            # If we formatted the whole document, the jump might be jarring.
+            # Otherwise, for selection, it stays right where the formatted text was inserted.
             self.editor.setTextCursor(cursor)
         except Exception as e:
             print(f"Format error: {e}")

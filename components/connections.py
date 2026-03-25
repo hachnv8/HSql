@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, 
-                             QLabel, QLineEdit, QComboBox, QPushButton, QTabWidget, QWidget)
+                             QLabel, QLineEdit, QComboBox, QPushButton, QTabWidget, QWidget, QCheckBox)
 from PyQt6.QtCore import Qt
 import json
 from components.db_store import get_management_accounts
@@ -157,10 +157,19 @@ class ConnectionDialog(QDialog):
         gen_layout.addLayout(host_port_layout, 0, 1)
         
         # Authentication
-        gen_layout.addWidget(QLabel("Authentication:"), 1, 0)
-        auth_combo = QComboBox()
-        auth_combo.addItems(["User & Password", "No Auth"])
-        gen_layout.addWidget(auth_combo, 1, 1)
+        auth_layout = QHBoxLayout()
+        self.auth_combo = QComboBox()
+        self.auth_combo.addItems(["User & Password", "No Auth"])
+        auth_layout.addWidget(self.auth_combo)
+        
+        # Windows Auth Checkbox (Only for SQL Server)
+        self.win_auth_checkbox = QCheckBox("Use Windows Authentication")
+        self.win_auth_checkbox.setStyleSheet("color: #589df6; margin-left: 10px;")
+        self.win_auth_checkbox.setVisible(False)
+        self.win_auth_checkbox.stateChanged.connect(self.on_win_auth_changed)
+        auth_layout.addWidget(self.win_auth_checkbox)
+        
+        gen_layout.addLayout(auth_layout, 1, 1)
         
         # User
         self.user_label = QLabel("User:")
@@ -230,6 +239,12 @@ class ConnectionDialog(QDialog):
             self.pass_edit.setText(connection_data[6])
             self.database_edit.setText(str(connection_data[7] or ""))
             self.is_default_val = connection_data[8] if len(connection_data) > 8 else 0
+            
+            # Load use_win_auth
+            use_win_auth = connection_data[9] if len(connection_data) > 9 else 0
+            self.win_auth_checkbox.setChecked(bool(use_win_auth))
+            if use_win_auth:
+                self.on_win_auth_changed(2) # Force disable fields
         else:
             self.type_combo.setCurrentText("⛁ MySQL")
             self.is_default_val = 0
@@ -295,7 +310,11 @@ class ConnectionDialog(QDialog):
             elif "SQL Server" in db_type:
                 import pyodbc
                 p = port if port else 1433
-                conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={host},{p};DATABASE={db_name};UID={user};PWD={password}"
+                
+                if self.win_auth_checkbox.isChecked():
+                    conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={host},{p};DATABASE={db_name};Trusted_Connection=yes"
+                else:
+                    conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={host},{p};DATABASE={db_name};UID={user};PWD={password}"
                 conn = pyodbc.connect(conn_str, timeout=5)
             elif "DB2" in db_type:
                 import jaydebeapi
@@ -344,6 +363,9 @@ class ConnectionDialog(QDialog):
             QMessageBox.critical(self, "Kết nối thất bại", f"❌ Lỗi kết nối:\n{str(e)}")
 
     def on_db_type_changed(self, text):
+        db_type = text.replace("⛁ ", "")
+        self.win_auth_checkbox.setVisible("SQL Server" in db_type)
+        
         # Only change default ports when switching DB type to avoid overwriting host
         if "Oracle" in text:
             self.port_edit.setText("1521")
@@ -356,6 +378,18 @@ class ConnectionDialog(QDialog):
             
         self.update_url()
 
+    def on_win_auth_changed(self, state):
+        is_windows_auth = (state == 2) # 2 is checked
+        self.user_edit.setEnabled(not is_windows_auth)
+        self.pass_edit.setEnabled(not is_windows_auth)
+        if is_windows_auth:
+            self.user_edit.setStyleSheet("background-color: #3c3f41; color: #7a7e85;")
+            self.pass_edit.setStyleSheet("background-color: #3c3f41; color: #7a7e85;")
+        else:
+            self.user_edit.setStyleSheet("")
+            self.pass_edit.setStyleSheet("")
+        self.update_url()
+
     def get_connection_data(self):
         return {
             'name': self.name_edit.text() or "Unnamed",
@@ -366,7 +400,8 @@ class ConnectionDialog(QDialog):
             'password': self.pass_edit.text(),
             'database_name': self.database_edit.text(),
             'is_synced': self.sync_combo.currentIndex() > 0,
-            'is_default': getattr(self, 'is_default_val', 0)
+            'is_default': getattr(self, 'is_default_val', 0),
+            'use_win_auth': 1 if self.win_auth_checkbox.isChecked() else 0
         }
 
     def update_url(self):

@@ -141,12 +141,17 @@ def init_db():
                     username VARCHAR(255),
                     password VARCHAR(255),
                     database_name VARCHAR(255),
-                    is_default INT DEFAULT 0
+                    is_default INT DEFAULT 0,
+                    use_win_auth INT DEFAULT 0
                 )
             ''')
             # Migration to add is_default if not exists
             try:
                 cursor.execute("ALTER TABLE connections ADD COLUMN is_default INT DEFAULT 0")
+            except Exception:
+                pass
+            try:
+                cursor.execute("ALTER TABLE connections ADD COLUMN use_win_auth INT DEFAULT 0")
             except Exception:
                 pass
         conn.commit()
@@ -157,7 +162,7 @@ def get_connections():
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name, is_default FROM connections")
+            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name, is_default, use_win_auth FROM connections")
             return cursor.fetchall()
     finally:
         conn.close()
@@ -166,7 +171,7 @@ def get_connection(conn_id):
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name, is_default FROM connections WHERE id = %s", (conn_id,))
+            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name, is_default, use_win_auth FROM connections WHERE id = %s", (conn_id,))
             return cursor.fetchone()
     finally:
         conn.close()
@@ -219,11 +224,19 @@ def save_connection(data):
     try:
         with conn.cursor() as cursor:
             if 'id' in data:
-                query = "UPDATE connections SET name=%s, db_type=%s, host=%s, port=%s, username=%s, password=%s, database_name=%s, is_default=%s WHERE id=%s"
-                cursor.execute(query, (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], data.get('is_default', 0), data['id']))
+                query = "UPDATE connections SET name=%s, db_type=%s, host=%s, port=%s, username=%s, password=%s, database_name=%s, is_default=%s, use_win_auth=%s WHERE id=%s"
+                cursor.execute(query, (
+                    data['name'], data['db_type'], data['host'], data['port'], 
+                    data['username'], data['password'], data['database_name'], 
+                    data.get('is_default', 0), data.get('use_win_auth', 0), data['id']
+                ))
             else:
-                query = "INSERT INTO connections (name, db_type, host, port, username, password, database_name, is_default) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-                cursor.execute(query, (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], data.get('is_default', 0)))
+                query = "INSERT INTO connections (name, db_type, host, port, username, password, database_name, is_default, use_win_auth) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                cursor.execute(query, (
+                    data['name'], data['db_type'], data['host'], data['port'], 
+                    data['username'], data['password'], data['database_name'], 
+                    data.get('is_default', 0), data.get('use_win_auth', 0)
+                ))
         conn.commit()
     finally:
         conn.close()
@@ -323,7 +336,12 @@ def get_db_connection(conn_id, database_name=None):
         import pyodbc
         # Port for SQL Server is usually 1433
         p = port if port else 1433
-        conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={host},{p};DATABASE={db_name};UID={user};PWD={password}"
+        use_win_auth = conn_data[10] if len(conn_data) > 10 else 0
+        
+        if use_win_auth:
+            conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={host},{p};DATABASE={db_name};Trusted_Connection=yes"
+        else:
+            conn_str = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={host},{p};DATABASE={db_name};UID={user};PWD={password}"
         return pyodbc.connect(conn_str)
     elif "DB2" in db_type:
         import jaydebeapi
