@@ -5,10 +5,11 @@ import json
 from components.db_store import get_management_accounts
 
 class ConnectionDialog(QDialog):
-    def __init__(self, parent=None, connection_data=None):
+    def __init__(self, parent=None, connection_data=None, active_conn_id=None):
         super().__init__(parent)
         self.connection_id = None
-        self.setWindowTitle("Data Sources and Drivers")
+        self.active_conn_id = active_conn_id
+        self.setWindowTitle("Add Connection" if not connection_data else "Connection Properties")
         self.resize(700, 550)
         
         # Thiết kế Dark Theme Darcula cho Dialog
@@ -162,7 +163,8 @@ class ConnectionDialog(QDialog):
         gen_layout.addWidget(auth_combo, 1, 1)
         
         # User
-        gen_layout.addWidget(QLabel("User:"), 2, 0)
+        self.user_label = QLabel("User:")
+        gen_layout.addWidget(self.user_label, 2, 0)
         self.user_edit = QLineEdit("")
         gen_layout.addWidget(self.user_edit, 2, 1)
         
@@ -179,8 +181,12 @@ class ConnectionDialog(QDialog):
         save_combo.addItems(["Forever", "Until restart", "Never"])
         pass_layout.addWidget(save_combo)
         
-        gen_layout.addWidget(QLabel("Password:"), 3, 0)
+        self.pass_label = QLabel("Password:")
+        gen_layout.addWidget(self.pass_label, 3, 0)
         gen_layout.addLayout(pass_layout, 3, 1)
+        
+        # Store layout for hiding
+        self.pass_container = pass_layout
         
         # Database
         gen_layout.addWidget(QLabel("Database:"), 4, 0)
@@ -252,7 +258,7 @@ class ConnectionDialog(QDialog):
 
     def test_connection(self):
         from PyQt6.QtWidgets import QMessageBox
-        from components.db_store import get_db_connection, save_connection, update_connection, get_connection
+        from components.db_store import save_connection, get_connection
         import os
         
         # To test, we temporarily need these settings in the DB or a way to pass them
@@ -356,7 +362,8 @@ class ConnectionDialog(QDialog):
             'port': int(self.port_edit.text() or 0),
             'username': self.user_edit.text(),
             'password': self.pass_edit.text(),
-            'database_name': self.database_edit.text()
+            'database_name': self.database_edit.text(),
+            'is_synced': self.sync_combo.currentIndex() > 0
         }
 
     def update_url(self):
@@ -379,14 +386,28 @@ class ConnectionDialog(QDialog):
             self.url_edit.setText(f"jdbc:as400://{host}{port_str}")
 
     def load_management_accounts(self):
-        self.mgmt_accounts = get_management_accounts()
+        self.mgmt_accounts = get_management_accounts(self.active_conn_id)
         # mgmt_accounts is a list of tuples: (id, name, url, icon, login_details, project_name)
         for acc in self.mgmt_accounts:
             display_name = f"[{acc[5]}] {acc[1]}" # [Project] AccountName
             self.sync_combo.addItem(display_name, acc)
 
     def on_sync_account_changed(self, index):
-        if index <= 0: return
+        is_synced = index > 0
+        
+        # Hide/Show User/Pass fields
+        self.user_label.setVisible(not is_synced)
+        self.user_edit.setVisible(not is_synced)
+        self.pass_label.setVisible(not is_synced)
+        
+        # We need to hide all widgets in pass_layout
+        for i in range(self.pass_container.count()):
+            widget = self.pass_container.itemAt(i).widget()
+            if widget:
+                widget.setVisible(not is_synced)
+        
+        if not is_synced: 
+            return
         
         acc = self.sync_combo.itemData(index)
         if not acc: return

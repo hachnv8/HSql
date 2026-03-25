@@ -7,21 +7,24 @@ DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'hsql.db')
 
 # Cấu hình môi trường mặc định
 ENVIRONMENT = "local"
-DB_HOST = "localhost"
+DB_HOST = "36.50.135.128" # Default to public IP for sync
 DB_PORT = 3306
-DB_USER = "root"
-DB_PASSWORD = ""
-DB_NAME = "portfolio_db"
+DB_USER = "account_user"
+DB_PASSWORD = "account_password"
+DB_NAME = "account_db"
 
 def set_environment(env):
     global ENVIRONMENT, DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
     ENVIRONMENT = env
     
-    # Đọc config.ini nếu chạy trên production (Linux)
     if ENVIRONMENT == "production":
+        # Production strictly uses 10.201.11.115 for internal storage/sync
+        DB_HOST = "10.201.11.115"
+        DB_PORT = 3306
+        DB_USER = "account_user"
+        DB_PASSWORD = "account_password"
+        DB_NAME = "account_db"
         print(f"--- DEBUG: Starting production config load ---")
-        print(f"Current Dir (os.getcwd()): {os.getcwd()}")
-        print(f"Script Dir (__file__): {os.path.dirname(__file__)}")
         
         possible_paths = [
             os.path.join(os.path.dirname(__file__), '..', 'config.ini'),
@@ -32,9 +35,7 @@ def set_environment(env):
         config_file = None
         for p in possible_paths:
             abs_p = os.path.abspath(p)
-            exists = os.path.exists(abs_p)
-            print(f"Checking path: {abs_p} -> Exists: {exists}")
-            if exists:
+            if os.path.exists(abs_p):
                 config_file = abs_p
                 break
                 
@@ -42,28 +43,24 @@ def set_environment(env):
             try:
                 config = configparser.ConfigParser()
                 config.read(config_file, encoding="utf-8")
-                print(f"Successfully read config file. Sections: {config.sections()}")
-                
                 if 'database' in config:
                     db_config = config['database']
                     DB_HOST = db_config.get("host", "10.201.11.115")
                     DB_PORT = int(db_config.get("port", "3306"))
-                    DB_USER = db_config.get("username", "root")
-                    DB_PASSWORD = db_config.get("password", "")
-                    DB_NAME = db_config.get("database", "portfolio_db")
-                    print(f"--- SUCCESS: Loaded config ---")
-                    print(f"Host: {DB_HOST}, User: {DB_USER}, DB: {DB_NAME}")
-                else:
-                    print("Error: Section [database] NOT FOUND in config.ini")
+                    DB_USER = db_config.get("username", "account_user")
+                    DB_PASSWORD = db_config.get("password", "account_password")
+                    DB_NAME = db_config.get("database", "account_db")
+                    print(f"--- SUCCESS: Loaded production config ---")
             except Exception as e:
                 print(f"Error parsing config.ini: {e}")
-        else:
-            print("--- CRITICAL: config.ini NOT FOUND in any expected location ---")
-            # Fallback values
-            DB_HOST = "10.201.11.115"
-            DB_PORT = 3306
-            DB_USER = "portfolio_user" # Better defaults just in case
-            DB_PASSWORD = "portfolio_password"
+    else:
+        # Local strictly uses 36.50.135.128 and account_db
+        DB_HOST = "36.50.135.128"
+        DB_PORT = 3306
+        DB_USER = "account_user"
+        DB_PASSWORD = "account_password"
+        DB_NAME = "account_db"
+        print(f"--- SUCCESS: Running in Local mode with remote MySQL 36.50.135.128 ---")
 
 def get_mysql_connection():
     import pymysql
@@ -77,168 +74,162 @@ def get_mysql_connection():
         connect_timeout=10
     )
 
-def get_management_accounts():
+def get_management_accounts(conn_id=None):
     """
-    Fetches the list of accounts from the account management database.
-    Uses account_db.accounts to ensure it points to the correct DB on the same server.
+    Fetches the list of accounts from the internal management database
+    based on the current environment (Local or Production).
     """
     try:
+        # ALWAYS use the internal management MySQL for sync
         conn = get_mysql_connection()
+            
+        if not conn: 
+            return []
+        
         try:
             with conn.cursor() as cursor:
-                # Query using fully qualified name to ensure it finds the table
-                # regardless of which database HSql is primarily connected to.
-                query = """
-                    SELECT a.id, a.name, a.url, a.platform_icon, a.login_details, p.name as project_name
-                    FROM account_db.accounts a
-                    LEFT JOIN account_db.projects p ON a.project_id = p.id
-                    ORDER BY p.name, a.name
-                """
+                # Check if projects table exists
+                cursor.execute("SHOW TABLES LIKE 'projects'")
+                has_projects = cursor.fetchone()
+                
+                if has_projects:
+                    query = """
+                        SELECT a.id, a.name, a.url, a.platform_icon, a.login_details, p.name as project_name
+                        FROM accounts a
+                        LEFT JOIN projects p ON a.project_id = p.id
+                        ORDER BY p.name, a.name
+                    """
+                else:
+                    query = """
+                        SELECT id, name, url, platform_icon, login_details, 'No Project' as project_name
+                        FROM accounts
+                        ORDER BY name
+                    """
+                
                 cursor.execute(query)
-                return cursor.fetchall()
+                results = cursor.fetchall()
+                return results
         finally:
             conn.close()
     except Exception as e:
-        print(f"Error fetching management accounts: {e}")
+        print(f"Error fetching accounts from management database: {e}")
         return []
 
 def init_db():
-    if ENVIRONMENT == "local":
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
+    # Luôn khởi tạo DB trên MySQL
+    import pymysql
+    try:
+        temp_conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD)
+        with temp_conn.cursor() as temp_cursor:
+            temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME}")
+        temp_conn.commit()
+        temp_conn.close()
+    except Exception as e:
+        print(f"Error creating/checking database: {e}")
+        pass
+
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS connections (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT,
-                    db_type TEXT,
-                    host TEXT,
-                    port INTEGER,
-                    username TEXT,
-                    password TEXT,
-                    database_name TEXT
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255),
+                    db_type VARCHAR(50),
+                    host VARCHAR(255),
+                    port INT,
+                    username VARCHAR(255),
+                    password VARCHAR(255),
+                    database_name VARCHAR(255)
                 )
             ''')
-            conn.commit()
-    else:
-        # Nếu chưa có DB, tạo mới cho Production
-        import pymysql
-        try:
-            temp_conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD)
-            with temp_conn.cursor() as temp_cursor:
-                temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME}")
-            temp_conn.commit()
-            temp_conn.close()
-        except Exception as e:
-            print(f"Error creating production database: {e}")
-            pass
-
-        conn = get_mysql_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS connections (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        name VARCHAR(255),
-                        db_type VARCHAR(50),
-                        host VARCHAR(255),
-                        port INT,
-                        username VARCHAR(255),
-                        password VARCHAR(255),
-                        database_name VARCHAR(255)
-                    )
-                ''')
-            conn.commit()
-        finally:
-            conn.close()
+        conn.commit()
+    finally:
+        conn.close()
 
 def get_connections():
-    if ENVIRONMENT == "local":
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cursor:
             cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections")
             return cursor.fetchall()
-    else:
-        conn = get_mysql_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections")
-                return cursor.fetchall()
-        finally:
-            conn.close()
+    finally:
+        conn.close()
 
 def get_connection(conn_id):
-    if ENVIRONMENT == "local":
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections WHERE id = ?", (conn_id,))
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections WHERE id = %s", (conn_id,))
             return cursor.fetchone()
-    else:
-        conn = get_mysql_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT id, name, db_type, host, port, username, password, database_name FROM connections WHERE id = %s", (conn_id,))
-                return cursor.fetchone()
-        finally:
-            conn.close()
+    finally:
+        conn.close()
 
-def update_connection(conn_id, data):
-    if ENVIRONMENT == "local":
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE connections 
-                SET name=?, db_type=?, host=?, port=?, username=?, password=?, database_name=?
-                WHERE id=?
-            ''', (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], conn_id))
-            conn.commit()
-    else:
-        conn = get_mysql_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute('''
-                    UPDATE connections 
-                    SET name=%s, db_type=%s, host=%s, port=%s, username=%s, password=%s, database_name=%s
-                    WHERE id=%s
-                ''', (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], conn_id))
-            conn.commit()
-        finally:
-            conn.close()
+def save_to_management_accounts(data):
+    """
+    Saves a manual connection's details to the centralized accounts table.
+    """
+    import json
+    import pymysql
+    
+    # Construct login_details JSON
+    details = {
+        "username": data.get('username', ''),
+        "password": data.get('password', ''),
+        "port": data.get('port', 3306),
+        "database": data.get('database_name', ''),
+        "notes": "Auto-saved from HSql"
+    }
+    login_details_json = json.dumps(details)
+    
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cursor:
+            # We use name as the account name, host as URL
+            # platform_icon is 'bx bxs-data' for Database type
+            query = """
+                INSERT INTO accounts (name, url, platform_icon, login_details, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, NOW(), NOW())
+            """
+            cursor.execute(query, (
+                data['name'], 
+                data['host'], 
+                'bx bxs-data', 
+                login_details_json
+            ))
+        conn.commit()
+    except Exception as e:
+        print(f"Error auto-saving to management accounts: {e}")
+    finally:
+        conn.close()
 
 def save_connection(data):
-    if ENVIRONMENT == "local":
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO connections (name, db_type, host, port, username, password, database_name)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name']))
-            conn.commit()
-    else:
-        conn = get_mysql_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute('''
-                    INSERT INTO connections (name, db_type, host, port, username, password, database_name)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ''', (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name']))
-            conn.commit()
-        finally:
-            conn.close()
+    # Auto-save to management accounts if NOT synced and NOT an update
+    # In this app, data usually comes without 'id' if it's new
+    if not data.get('is_synced', False) and 'id' not in data:
+        save_to_management_accounts(data)
+
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cursor:
+            if 'id' in data:
+                query = "UPDATE connections SET name=%s, db_type=%s, host=%s, port=%s, username=%s, password=%s, database_name=%s WHERE id=%s"
+                cursor.execute(query, (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name'], data['id']))
+            else:
+                query = "INSERT INTO connections (name, db_type, host, port, username, password, database_name) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                cursor.execute(query, (data['name'], data['db_type'], data['host'], data['port'], data['username'], data['password'], data['database_name']))
+        conn.commit()
+    finally:
+        conn.close()
 
 def set_default_database(conn_id, db_name):
-    if ENVIRONMENT == "local":
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute("UPDATE connections SET database_name = ? WHERE id = ?", (db_name, conn_id))
-            conn.commit()
-    else:
-        conn = get_mysql_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute("UPDATE connections SET database_name = %s WHERE id = %s", (db_name, conn_id))
-            conn.commit()
-        finally:
-            conn.close()
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE connections SET database_name = %s WHERE id = %s", (db_name, conn_id))
+        conn.commit()
+    finally:
+        conn.close()
 
 def get_default_database(conn_id):
     conn_data = get_connection(conn_id)

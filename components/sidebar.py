@@ -64,7 +64,8 @@ class DatabaseExplorer(QDockWidget):
     def open_connection_dialog(self):
         from components.connections import ConnectionDialog
         from components.db_store import save_connection
-        dlg = ConnectionDialog(self)
+        active_id = getattr(self, 'active_conn_id', None)
+        dlg = ConnectionDialog(self, active_conn_id=active_id)
         if dlg.exec():
             data = dlg.get_connection_data()
             save_connection(data)
@@ -163,16 +164,18 @@ class DatabaseExplorer(QDockWidget):
                 self.open_properties(conn_id)
 
     def open_properties(self, conn_id):
-        from components.db_store import get_connection, update_connection
+        from components.db_store import get_connection, save_connection
         from components.connections import ConnectionDialog
         
         conn_data = get_connection(conn_id)
         if not conn_data: return
         
-        dlg = ConnectionDialog(self, conn_data)
+        active_id = getattr(self, 'active_conn_id', None)
+        dlg = ConnectionDialog(self, conn_data, active_conn_id=active_id)
         if dlg.exec():
             data = dlg.get_connection_data()
-            update_connection(conn_id, data)
+            data['id'] = conn_id  # Include original ID for update
+            save_connection(data)
             self.reload_treeview()
 
     def on_item_expanded(self, index):
@@ -370,6 +373,7 @@ class DatabaseExplorer(QDockWidget):
 
     def highlight_active_context(self, conn_id, db_name=None):
         from PyQt6.QtGui import QColor, QFont
+        self.active_conn_id = conn_id
         
         # Reset all styles first
         def reset_items(parent_item):
