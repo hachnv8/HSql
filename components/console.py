@@ -107,7 +107,9 @@ class SqlConsole(QWidget):
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
+        self.current_file = None
         self.current_conn_id = None
+        self.current_db_name = None
         self.active_conn = None # Persistent connection for transactions
         
         self.setup_inline_toolbar()
@@ -138,7 +140,7 @@ class SqlConsole(QWidget):
             QListView::item:selected { background-color: #2f65ca; color: white; }
         """)
         self.editor.setCompleter(self.completer)
-        self.update_autocomplete(None, None)
+        self.update_autocomplete()
         
         self.layout.addWidget(self.editor)
         self.setup_shortcuts()
@@ -250,67 +252,70 @@ class SqlConsole(QWidget):
         
     def set_database_context(self, conn_id, db_name):
         self.current_conn_id = conn_id
+        self.current_db_name = db_name
         self.schema_combo.clear()
-        self.schema_combo.addItem(db_name)
-        self.schema_combo.setCurrentText(db_name)
-        self.update_autocomplete(conn_id, db_name if db_name != "<schema>" else None)
+        if db_name:
+            self.schema_combo.addItem(db_name)
+        else:
+            self.schema_combo.addItem("<Connection Only>")
+        
+        # Trigger autocomplete update (Tables in current db or list of dbs)
+        self.update_autocomplete()
 
-    def update_autocomplete(self, conn_id, db_name):
+    def update_autocomplete(self):
         keywords = ["SELECT", "FROM", "WHERE", "INSERT", "INTO", "UPDATE", "DELETE", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "ON", "GROUP BY", "ORDER BY", "HAVING", "LIMIT", "OFFSET", "CREATE", "ALTER", "DROP", "TABLE", "DATABASE", "INDEX", "VIEW", "AS", "AND", "OR", "NOT", "IS", "NULL", "PRIMARY KEY", "FOREIGN KEY", "REFERENCES", "SET", "VALUES", "ALTER TABLE", "ADD COLUMN", "CHANGE COLUMN"]
-        tables = []
-        schemas = []
-        if conn_id:
+        self.editor.sql_keywords = keywords
+        self.editor.sql_tables = []
+        self.editor.sql_schemas = []
+        self.completer_data = list(keywords)
+        
+        if self.current_conn_id:
             try:
                 from components.db_store import get_db_connection, get_connection
-                conn_data = get_connection(conn_id)
+                conn_data = get_connection(self.current_conn_id)
                 db_type = conn_data[2]
                 
-                # Use active connection for autocomplete if available
-                conn = self.active_conn if self.active_conn else get_db_connection(conn_id, db_name)
+                conn = self.active_conn if self.active_conn else get_db_connection(self.current_conn_id, self.current_db_name)
                 
                 if conn:
-                    cur = conn.cursor()
+                    cursor = conn.cursor()
                     try:
-                        # 1. Fetch tables from current schema
-                        if "MySQL" in db_type:
-                            if db_name: cur.execute("SHOW TABLES")
-                            else: cur.execute("SHOW DATABASES")
-                        elif "Oracle" in db_type:
-                            if db_name: cur.execute("SELECT table_name FROM all_tables WHERE owner = :1", (db_name,))
-                            else: cur.execute("SELECT username FROM all_users")
-                        elif "SQL Server" in db_type:
-                            if db_name: cur.execute("SELECT table_name FROM information_schema.tables WHERE table_catalog = ?", (db_name,))
-                            else: cur.execute("SELECT name FROM sys.databases")
-                        elif "DB2" in db_type:
-                            if db_name: cur.execute("SELECT TABLE_NAME FROM QSYS2.SYSTABLES WHERE TABLE_SCHEMA = ?", (db_name,))
-                        
-                        rows = cur.fetchall()
-                        tables = [str(r[0]) for r in rows]
-                        
-                        # 2. Fetch all available schemas/libraries for multi-schema support
-                        if "DB2" in db_type:
-                            cur.execute("SELECT SCHEMA_NAME FROM QSYS2.SYSSCHEMAS ORDER BY SCHEMA_NAME")
-                            schemas = [str(r[0]) for r in cur.fetchall()]
-                        elif "MySQL" in db_type:
-                            cur.execute("SHOW DATABASES")
-                            schemas = [str(r[0]) for r in cur.fetchall()]
-                        elif "SQL Server" in db_type:
-                            cur.execute("SELECT name FROM sys.databases")
-                            schemas = [str(r[0]) for r in cur.fetchall()]
+                        if self.current_db_name:
+                            if "MySQL" in db_type:
+                                cursor.execute("SHOW TABLES")
+                            elif "Oracle" in db_type:
+                                cursor.execute("SELECT table_name FROM all_tables WHERE owner = :1", (self.current_db_name,))
+                            elif "SQL Server" in db_type:
+                                cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_catalog = ?", (self.current_db_name,))
+                            elif "DB2" in db_type:
+                                cursor.execute("SELECT TABLE_NAME FROM QSYS2.SYSTABLES WHERE TABLE_SCHEMA = ?", (self.current_db_name,))
+                            
+                            tables = [str(r[0]).strip() for r in cursor.fetchall()]
+                            self.editor.sql_tables = tables
+                            self.completer_data += tables
+                        else:
+                            # Connection level - load schemas
+                            if "MySQL" in db_type:
+                                cursor.execute("SHOW DATABASES")
+                            elif "Oracle" in db_type:
+                                cursor.execute("SELECT username FROM all_users")
+                            elif "SQL Server" in db_type:
+                                cursor.execute("SELECT name FROM sys.databases")
+                            elif "DB2" in db_type:
+                                cursor.execute("SELECT SCHEMA_NAME FROM QSYS2.SYSSCHEMAS")
+                            
+                            schemas = [str(r[0]).strip() for r in cursor.fetchall()]
+                            self.editor.sql_schemas = schemas
+                            self.completer_data += schemas
                             
                     finally:
-                        cur.close()
-                    # Only close if it was a temporary connection
+                        cursor.close()
                     if not self.active_conn:
                         conn.close()
             except Exception:
                 pass
         
-        self.editor.sql_keywords = keywords
-        self.editor.sql_tables = tables
-        self.editor.sql_schemas = schemas
         self.editor._last_context_was_table = False
-        
         self.refresh_completer_model()
 
     def fetch_schema_tables(self, schema_name):
@@ -530,8 +535,24 @@ class SqlConsole(QWidget):
                     main_window.tabs.setTabText(idx, os.path.basename(file_path))
                     
         try:
+            import json
+            context = {
+                "conn_id": self.current_conn_id,
+                "db_name": self.schema_combo.currentText()
+            }
+            context_header = f"-- @hsql_context: {json.dumps(context)}\n"
+            
+            content = self.editor.toPlainText()
+            # If already has context header, replace it
+            if content.startswith("-- @hsql_context:"):
+                first_newline = content.find("\n")
+                if first_newline != -1:
+                    content = content[first_newline+1:]
+            
+            final_content = context_header + content
+            
             with open(self.current_file, "w", encoding="utf-8") as f:
-                f.write(self.editor.toPlainText())
+                f.write(final_content)
             main_window = self.window()
             if hasattr(main_window, "statusBar"):
                 bar = main_window.statusBar() if callable(main_window.statusBar) else main_window.statusBar
@@ -562,6 +583,23 @@ class SqlConsole(QWidget):
                 new_console.editor.setPlainText(content)
                 new_console.current_file = file_path
                 
+                # Check for @hsql_context
+                import json
+                if content.startswith("-- @hsql_context:"):
+                    try:
+                        first_line = content.split("\n")[0]
+                        json_str = first_line.replace("-- @hsql_context:", "").strip()
+                        ctx = json.loads(json_str)
+                        conn_id = ctx.get("conn_id")
+                        db_name = ctx.get("db_name")
+                        if conn_id:
+                            # Verify connection still exists
+                            from components.db_store import get_connection
+                            if get_connection(conn_id):
+                                new_console.set_database_context(conn_id, db_name)
+                    except Exception as e:
+                        print(f"Error parsing context: {e}")
+
                 if hasattr(main_window, 'tabs'):
                     idx = main_window.tabs.addTab(new_console, file_name)
                     main_window.tabs.setCurrentIndex(idx)

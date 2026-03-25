@@ -50,6 +50,7 @@ class HSqlMainWindow(QMainWindow):
         """)
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
+        self.tabs.currentChanged.connect(self.on_tab_changed)
         
         # Context menu for Tab Bar
         self.tabs.tabBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -106,7 +107,10 @@ class HSqlMainWindow(QMainWindow):
         current_console = self.tabs.currentWidget()
         if hasattr(current_console, "set_database_context"):
             current_console.set_database_context(conn_id, db_name)
-            self.statusBar.showMessage(f"Selected Database Context: {db_name}", 5000)
+            # Update sidebar highlight
+            self.explorer.highlight_active_context(conn_id, db_name)
+            msg = f"Selected Database Context: {db_name}" if db_name else f"Selected Connection Context: {conn_id}"
+            self.statusBar.showMessage(msg, 5000)
 
     def display_results(self, headers, rows):
         self.results.update_data(headers, rows)
@@ -218,6 +222,18 @@ class HSqlMainWindow(QMainWindow):
     def close_tabs_to_right(self, index):
         for i in range(self.tabs.count() - 1, index, -1):
             self.close_tab(i)
+
+    def on_tab_changed(self, index):
+        if index == -1: return
+        console = self.tabs.widget(index)
+        if isinstance(console, SqlConsole):
+            conn_id = getattr(console, "current_conn_id", None)
+            db_name = getattr(console, "current_db_name", None)
+            if conn_id:
+                self.explorer.highlight_active_context(conn_id, db_name)
+            else:
+                # Clear highlight if no context
+                self.explorer.highlight_active_context(None, None)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

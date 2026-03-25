@@ -82,13 +82,10 @@ class DatabaseExplorer(QDockWidget):
                 main_window.set_active_database(conn_id, db_name)
         elif node_type == "connection":
             conn_id = item.data(Qt.ItemDataRole.UserRole)
-            from components.db_store import get_connection
-            conn_data = get_connection(conn_id)
-            if conn_data and conn_data[7]: # database_name is at index 7
-                db_name = conn_data[7]
-                main_window = self.window()
-                if hasattr(main_window, "set_active_database"):
-                    main_window.set_active_database(conn_id, db_name)
+            main_window = self.window()
+            if hasattr(main_window, "set_active_database"):
+                # No specific DB selected, just the connection
+                main_window.set_active_database(conn_id, None)
 
     def on_context_menu(self, position):
         index = self.treeView.indexAt(position)
@@ -113,6 +110,9 @@ class DatabaseExplorer(QDockWidget):
                 QMenu::separator { height: 1px; background: #2b2b2b; margin: 4px 0px; }
             """)
             
+            select_context_action = menu.addAction("Select Context")
+            menu.addSeparator()
+            
             new_menu = menu.addMenu("+ New")
             new_console_action = new_menu.addAction("Query Console")
             
@@ -128,8 +128,18 @@ class DatabaseExplorer(QDockWidget):
                 prop_action = None
             
             action = menu.exec(self.treeView.viewport().mapToGlobal(position))
-            if action == new_console_action:
-                main_window = self.window()
+            
+            main_window = self.window()
+            if action == select_context_action:
+                if node_type == "database":
+                    db_name = item.data(Qt.ItemDataRole.UserRole + 3)
+                    if hasattr(main_window, "set_active_database"):
+                        main_window.set_active_database(conn_id, db_name)
+                else:
+                    # For connection node, select only the connection
+                    if hasattr(main_window, "set_active_database"):
+                        main_window.set_active_database(conn_id, None)
+            elif action == new_console_action:
                 if hasattr(main_window, "open_new_console"):
                     if node_type == "database":
                         db_name = item.data(Qt.ItemDataRole.UserRole + 3)
@@ -233,6 +243,13 @@ class DatabaseExplorer(QDockWidget):
                 
                 db_item.appendRow(QStandardItem("Loading..."))
                 item.appendRow(db_item)
+                
+            # After loading databases, re-apply highlight if needed
+            main_window = self.window()
+            if hasattr(main_window, "tabs"):
+                console = main_window.tabs.currentWidget()
+                if hasattr(console, "current_conn_id") and console.current_conn_id == conn_id:
+                    self.highlight_active_context(console.current_conn_id, getattr(console, "current_db_name", None))
         except Exception as e:
             item.appendRow(QStandardItem(f"Error: {e}"))
 
@@ -350,3 +367,42 @@ class DatabaseExplorer(QDockWidget):
                 self.rootNode.appendRow(connectionNode)
         
         self.treeView.expandAll()
+
+    def highlight_active_context(self, conn_id, db_name=None):
+        from PyQt6.QtGui import QColor, QFont
+        
+        # Reset all styles first
+        def reset_items(parent_item):
+            for row in range(parent_item.rowCount()):
+                child = parent_item.child(row)
+                child.setForeground(QColor("#bcbec4"))
+                font = child.font()
+                font.setBold(False)
+                child.setFont(font)
+                if child.rowCount() > 0:
+                    reset_items(child)
+        
+        reset_items(self.rootNode)
+        
+        # Find and highlight target
+        for row in range(self.rootNode.rowCount()):
+            conn_item = self.rootNode.child(row)
+            if conn_item.data(Qt.ItemDataRole.UserRole) == conn_id:
+                # If db_name is None, highlight the connection itself
+                if db_name is None:
+                    conn_item.setForeground(QColor("#629755")) # Green
+                    font = conn_item.font()
+                    font.setBold(True)
+                    conn_item.setFont(font)
+                else:
+                    # Highlight the specific database under this connection
+                    for sub_row in range(conn_item.rowCount()):
+                        db_item = conn_item.child(sub_row)
+                        if db_item.data(Qt.ItemDataRole.UserRole + 1) == "database" and \
+                           db_item.data(Qt.ItemDataRole.UserRole + 3) == db_name:
+                            db_item.setForeground(QColor("#629755"))
+                            font = db_item.font()
+                            font.setBold(True)
+                            db_item.setFont(font)
+                            break
+                break
