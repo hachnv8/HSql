@@ -77,6 +77,31 @@ def get_mysql_connection():
         connect_timeout=10
     )
 
+def get_management_accounts():
+    """
+    Fetches the list of accounts from the account management database.
+    Uses account_db.accounts to ensure it points to the correct DB on the same server.
+    """
+    try:
+        conn = get_mysql_connection()
+        try:
+            with conn.cursor() as cursor:
+                # Query using fully qualified name to ensure it finds the table
+                # regardless of which database HSql is primarily connected to.
+                query = """
+                    SELECT a.id, a.name, a.url, a.platform_icon, a.login_details, p.name as project_name
+                    FROM account_db.accounts a
+                    LEFT JOIN account_db.projects p ON a.project_id = p.id
+                    ORDER BY p.name, a.name
+                """
+                cursor.execute(query)
+                return cursor.fetchall()
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Error fetching management accounts: {e}")
+        return []
+
 def init_db():
     if ENVIRONMENT == "local":
         with sqlite3.connect(DB_PATH) as conn:

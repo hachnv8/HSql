@@ -1,6 +1,8 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, 
                              QLabel, QLineEdit, QComboBox, QPushButton, QTabWidget, QWidget)
 from PyQt6.QtCore import Qt
+import json
+from components.db_store import get_management_accounts
 
 class ConnectionDialog(QDialog):
     def __init__(self, parent=None, connection_data=None):
@@ -110,13 +112,21 @@ class ConnectionDialog(QDialog):
         self.type_combo.currentTextChanged.connect(self.on_db_type_changed)
         top_layout.addWidget(self.type_combo, 0, 1)
         
-        top_layout.addWidget(QLabel("Name:"), 1, 0)
+        # Add Account Sync Dropdown
+        top_layout.addWidget(QLabel("Sync Account:"), 1, 0)
+        self.sync_combo = QComboBox()
+        self.sync_combo.addItem("--- Select From Management ---")
+        self.load_management_accounts()
+        self.sync_combo.currentIndexChanged.connect(self.on_sync_account_changed)
+        top_layout.addWidget(self.sync_combo, 1, 1)
+
+        top_layout.addWidget(QLabel("Name:"), 2, 0)
         self.name_edit = QLineEdit("")
-        top_layout.addWidget(self.name_edit, 1, 1)
+        top_layout.addWidget(self.name_edit, 2, 1)
         
-        top_layout.addWidget(QLabel("Comment:"), 2, 0)
+        top_layout.addWidget(QLabel("Comment:"), 3, 0)
         comment_edit = QLineEdit()
-        top_layout.addWidget(comment_edit, 2, 1)
+        top_layout.addWidget(comment_edit, 3, 1)
         
         main_layout.addLayout(top_layout)
         
@@ -367,3 +377,49 @@ class ConnectionDialog(QDialog):
             self.url_edit.setText(f"jdbc:sqlserver://{host}{port_str}")
         elif "DB2" in db_type:
             self.url_edit.setText(f"jdbc:as400://{host}{port_str}")
+
+    def load_management_accounts(self):
+        self.mgmt_accounts = get_management_accounts()
+        # mgmt_accounts is a list of tuples: (id, name, url, icon, login_details, project_name)
+        for acc in self.mgmt_accounts:
+            display_name = f"[{acc[5]}] {acc[1]}" # [Project] AccountName
+            self.sync_combo.addItem(display_name, acc)
+
+    def on_sync_account_changed(self, index):
+        if index <= 0: return
+        
+        acc = self.sync_combo.itemData(index)
+        if not acc: return
+        
+        # acc: (id, name, url, icon, login_details, project_name)
+        self.name_edit.setText(acc[1])
+        self.host_edit.setText(acc[2])
+        
+        # Try to guess DB type from icon or name
+        icon = acc[3].lower() if acc[3] else ""
+        name = acc[1].lower()
+        if "mysql" in name or "mysql" in icon:
+            self.type_combo.setCurrentText("⛁ MySQL")
+        elif "oracle" in name:
+            self.type_combo.setCurrentText("⛁ Oracle")
+        elif "sql server" in name or "mssql" in name:
+            self.type_combo.setCurrentText("⛁ Microsoft SQL Server")
+        elif "db2" in name or "iseries" in name:
+            self.type_combo.setCurrentText("⛁ DB2 iSeries")
+            
+        # Parse login details
+        login_json = acc[4]
+        if login_json:
+            try:
+                details = json.loads(login_json)
+                if "username" in details: self.user_edit.setText(details["username"])
+                if "user" in details: self.user_edit.setText(details["user"])
+                if "password" in details: self.pass_edit.setText(details["password"])
+                if "pass" in details: self.pass_edit.setText(details["pass"])
+                if "port" in details: self.port_edit.setText(str(details["port"]))
+                if "database" in details: self.database_edit.setText(details["database"])
+                if "db" in details: self.database_edit.setText(details["db"])
+            except:
+                pass
+        
+        self.update_url()
