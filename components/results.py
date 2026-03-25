@@ -1,8 +1,11 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QToolBar, QHeaderView
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QToolBar, QHeaderView, QFileDialog
 from PyQt6.QtGui import QAction
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
+import csv
 
 class ResultsGrid(QWidget):
+    refresh_requested = pyqtSignal()
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layout = QVBoxLayout(self)
@@ -26,8 +29,14 @@ class ResultsGrid(QWidget):
             }
         """)
         
-        self.toolbar.addAction(QAction("↺ Refresh", self))
-        self.toolbar.addAction(QAction("↓ Export Data", self))
+        refresh_action = QAction("↺ Refresh", self)
+        refresh_action.triggered.connect(self.refresh_requested.emit)
+        self.toolbar.addAction(refresh_action)
+        
+        export_action = QAction("↓ Export Data", self)
+        export_action.triggered.connect(self.export_data)
+        self.toolbar.addAction(export_action)
+        
         self.layout.addWidget(self.toolbar)
 
     def setup_table(self):
@@ -148,3 +157,36 @@ class ResultsGrid(QWidget):
                     else:
                         item = QTableWidgetItem(str(col_data))
                     self.table.setItem(row_idx, col_idx, item)
+
+    def export_data(self):
+        if self.table.rowCount() == 0 or (self.table.rowCount() == 1 and self.table.item(0, 0).text() == ""):
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Data", "", "CSV Files (*.csv);;All Files (*)"
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'w', newline='', encoding='utf-8-sig') as f:
+                    writer = csv.writer(f)
+                    
+                    # Write headers
+                    headers = []
+                    for col in range(self.table.columnCount()):
+                        headers.append(self.table.horizontalHeaderItem(col).text())
+                    writer.writerow(headers)
+                    
+                    # Write rows
+                    for row in range(self.table.rowCount()):
+                        row_data = []
+                        for col in range(self.table.columnCount()):
+                            item = self.table.item(row, col)
+                            row_data.append(item.text() if item else "")
+                        writer.writerow(row_data)
+                
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.information(self, "Export Successful", f"Data exported to {file_path}")
+            except Exception as e:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.critical(self, "Export Failed", f"Could not export data: {str(e)}")

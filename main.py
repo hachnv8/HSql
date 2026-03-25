@@ -76,6 +76,7 @@ class HSqlMainWindow(QMainWindow):
         self.splitter.addWidget(self.tabs)
         
         self.results = ResultsGrid(self)
+        self.results.refresh_requested.connect(self.run_active_query)
         self.splitter.addWidget(self.results)
         self.splitter.setSizes([600, 200])
         self.setCentralWidget(self.splitter)
@@ -109,6 +110,12 @@ class HSqlMainWindow(QMainWindow):
 
     def display_results(self, headers, rows):
         self.results.update_data(headers, rows)
+
+    def run_active_query(self):
+        # Trigger query execution on the current active console tab
+        current_console = self.tabs.currentWidget()
+        if isinstance(current_console, SqlConsole):
+            current_console.execute_query()
 
     def open_new_console(self, name, conn_id=None, db_name=None):
         if conn_id and not db_name:

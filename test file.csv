@@ -1,0 +1,5 @@
+﻿id,created_at,created_by,updated_at,updated_by,last_updated,login_details,name,platform_icon,project_id,tags,url
+1,2026-03-16 16:07:56.692503,<null>,2026-03-16 16:07:56.692503,<null>,2026-03-16,"{""username"":""aa"",""password"":""aaa"",""notes"":null}",aaa,bx bx-globe,1,<null>,https:myapp.com
+2,2026-03-16 16:19:42.138346,<null>,2026-03-16 16:19:42.138346,<null>,2026-03-16,"{""username"":""aa"",""password"":""aaa"",""notes"":null}",aaa,bx bx-globe,2,<null>,https:myapp.com
+3,2026-03-18 15:08:12.159892,<null>,2026-03-18 15:08:12.159892,<null>,2026-03-18,"{""username"":""1"",""password"":""2"",""notes"":null}",bbb,bx bxl-slack,1,<null>,https:myapp.com
+4,2026-03-18 15:15:53.046460,<null>,2026-03-18 15:15:53.046460,<null>,2026-03-18,"{""username"":""aa"",""password"":""1"",""notes"":null}",this is test,bx bx-globe,1,<null>,
